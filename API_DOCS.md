@@ -267,8 +267,7 @@ Error responses will have the following format:
 2. Include the JWT token in the Authorization header for all authenticated requests.
 3. Handle token expiration and implement a refresh mechanism if necessary.
 4. Implement proper error handling and display user-friendly messages.
-5. Consider implementing a loading state while waiting for API responses.
-6. For real-time updates (if implemented), use WebSocket connections or implement polling mechanisms as advised by the backend team.
-7. Be aware of any rate limiting policies (e.g., 100 requests per 15 minutes per IP).
+5. implement a loading state while waiting for API responses.
+6. For RT updates (if implemented), use WebSocket connections or implement polling mechanisms as advised by the backend team.
+7. Be aware of rate limiting policies (e.g., 100 requests per 15 minutes per IP).
 
-Please contact the backend team if you encounter any issues or need further clarification on any endpoint.
