@@ -1,6 +1,6 @@
 # GPU Tapping Game API Documentation
 
-Base URL: `http://your-api-base-url.com/api`
+Base URL: `http://api.neurolov.ai/api`
 
 ## Authentication
 
