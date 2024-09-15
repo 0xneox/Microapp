@@ -1,72 +1,83 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const auth = require('../middleware/auth');
+const { param } = require('express-validator');
 
-// Get global leaderboard
-router.get('/global', async (req, res) => {
+router.get('/:type', [
+  auth,
+  param('type').isIn(['daily', 'weekly', 'all-time'])
+], async (req, res) => {
   try {
-    const leaderboard = await User.aggregate([
-      { $sort: { computePower: -1, compute: -1 } },
-      { $limit: 100 },
-      { $project: { username: 1, computePower: 1, compute: 1, _id: 0 } }
-    ]);
-    res.json(leaderboard);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+    const { type } = req.params;
+    let query = {};
+    let sort = {};
 
-// Get user's position in the leaderboard
-router.get('/position', async (req, res) => {
-  try {
-    const user = await User.findOne({ telegramId: req.user.telegramId });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const position = await User.countDocuments({
-      $or: [
-        { computePower: { $gt: user.computePower } },
-        { computePower: user.computePower, compute: { $gt: user.compute } }
-      ]
-    }) + 1;
-
-    res.json({ position, totalUsers: await User.countDocuments() });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get leaderboard for a specific timeframe (daily, weekly, monthly)
-router.get('/:timeframe', async (req, res) => {
-  try {
-    const { timeframe } = req.params;
-    let startDate;
-
-    switch (timeframe) {
+    switch (type) {
       case 'daily':
-        startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        query = { lastTapTime: { $gte: new Date(Date.now() - 24*60*60*1000) } };
+        sort = { compute: -1 };
         break;
       case 'weekly':
-        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        query = { lastTapTime: { $gte: new Date(Date.now() - 7*24*60*60*1000) } };
+        sort = { compute: -1 };
         break;
-      case 'monthly':
-        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      case 'all-time':
+        sort = { computePower: -1, compute: -1 };
         break;
-      default:
-        return res.status(400).json({ message: 'Invalid timeframe' });
     }
 
-    const leaderboard = await User.aggregate([
-      { $match: { lastTapTime: { $gte: startDate } } },
-      { $sort: { computePower: -1, compute: -1 } },
-      { $limit: 100 },
-      { $project: { username: 1, computePower: 1, compute: 1, _id: 0 } }
-    ]);
+    const leaderboard = await User.find(query)
+      .sort(sort)
+      .limit(100)
+      .select('username computePower compute');
 
     res.json(leaderboard);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.get('/position/:type', [
+  auth,
+  param('type').isIn(['daily', 'weekly', 'all-time'])
+], async (req, res) => {
+  try {
+    const { type } = req.params;
+    const user = await User.findOne({ telegramId: req.user.telegramId });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    let query = {};
+
+    switch (type) {
+      case 'daily':
+        query = { 
+          lastTapTime: { $gte: new Date(Date.now() - 24*60*60*1000) },
+          compute: { $gt: user.compute }
+        };
+        break;
+      case 'weekly':
+        query = { 
+          lastTapTime: { $gte: new Date(Date.now() - 7*24*60*60*1000) },
+          compute: { $gt: user.compute }
+        };
+        break;
+      case 'all-time':
+        query = { 
+          $or: [
+            { computePower: { $gt: user.computePower } },
+            { computePower: user.computePower, compute: { $gt: user.compute } }
+          ]
+        };
+        break;
+    }
+
+    const position = await User.countDocuments(query) + 1;
+    const totalUsers = await User.countDocuments();
+
+    res.json({ position, totalUsers });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

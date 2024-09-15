@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Quest = require('../models/Quest');
+const auth = require('../middleware/auth');
+const { body, validationResult } = require('express-validator');
 
-// Get user profile and dashboard data
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId })
       .populate('referredBy', 'username')
@@ -32,34 +33,32 @@ router.get('/', async (req, res) => {
 
     res.json(dashboardData);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Update user profile
-router.put('/update', async (req, res) => {
-  try {
-    const allowedUpdates = ['username'];
-    const updates = Object.keys(req.body)
-      .filter(update => allowedUpdates.includes(update))
-      .reduce((obj, key) => {
-        obj[key] = req.body[key];
-        return obj;
-      }, {});
+router.put('/update', [
+  auth,
+  body('username').optional().isString().trim().isLength({ min: 3, max: 30 })
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
 
+  try {
+    const { username } = req.body;
     const user = await User.findOneAndUpdate(
       { telegramId: req.user.telegramId },
-      { $set: updates },
+      { $set: { username } },
       { new: true, runValidators: true }
     );
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    res.json({ message: 'Profile updated successfully', user });
+    res.json({ message: 'Profile updated successfully', user: { username: user.username } });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ message: 'Server error', error: error.message });
   }
 });
 
