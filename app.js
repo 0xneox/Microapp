@@ -1,78 +1,41 @@
+require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const helmet = require('helmet');
+const cors = require('cors');
 const compression = require('compression');
-const TelegramBot = require('node-telegram-bot-api');
-const jwt = require('jsonwebtoken');
 const prometheus = require('prom-client');
-const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
-const config = require('./config');
 const logger = require('./utils/logger');
+const connectDB = require('./database/mongoose');
 const errorHandler = require('./middleware/errorHandler');
 const rateLimiter = require('./middleware/rateLimiter');
-
-const User = require('./models/User');  // Import the User model
-
-const userRoutes = require('./routes/userRoutes');
-const questRoutes = require('./routes/questRoutes');
-const leaderboardRoutes = require('./routes/leaderboardRoutes');
-const profileDashboardRoutes = require('./routes/profileDashboardRoutes');
-const referralRoutes = require('./routes/referralRoutes');
+const routes = require('./routes');
+const { initTelegramBot } = require('./utils/telegramBot');
 
 const app = express();
 
+// Connect to MongoDB
+connectDB();
+
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: config.corsOrigin,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
 app.use(compression());
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(rateLimiter);
 
-// Connect to MongoDB
-mongoose.connect(config.mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  maxPoolSize: 10
-})
-.then(() => {
-  logger.info('Connected to MongoDB');
-})
-.catch((err) => {
-  logger.error('MongoDB connection error:', err);
-  process.exit(1);
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
 });
-
-// Telegram Bot setup
-const bot = new TelegramBot(config.telegramBotToken, { polling: false });
-
-// JWT middleware
-const authenticateJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(' ')[1];
-    jwt.verify(token, config.jwtSecret, (err, user) => {
-      if (err) {
-        return res.status(403).json({ error: 'Invalid or expired token' });
-      }
-      req.user = user;
-      next();
-    });
-  } else {
-    res.status(401).json({ error: 'Authentication token is required' });
-  }
-};
+app.use('/api', limiter);
 
 // Prometheus metrics
-const collectDefaultMetrics = prometheus.collectDefaultMetrics;
-collectDefaultMetrics({ timeout: 5000 });
-
+prometheus.collectDefaultMetrics({ timeout: 5000 });
 const httpRequestDurationMicroseconds = new prometheus.Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
@@ -92,53 +55,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Routes
+app.use('/api', routes);
+
+// Proxy for Telegram Bot API
+app.use('/bot', createProxyMiddleware({ 
+  target: 'https://api.telegram.org',
+  changeOrigin: true,
+  pathRewrite: {'^/bot' : '/bot' + process.env.TELEGRAM_BOT_TOKEN}
+}));
+
 // Expose metrics endpoint for Prometheus
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', prometheus.register.contentType);
   res.end(await prometheus.register.metrics());
 });
 
-// Routes
-app.use('/api/users', authenticateJWT, userRoutes);
-app.use('/api/quests', authenticateJWT, questRoutes);
-app.use('/api/leaderboard', authenticateJWT, leaderboardRoutes);
-app.use('/api/profile-dashboard', authenticateJWT, profileDashboardRoutes);
-app.use('/api/referral', authenticateJWT, referralRoutes);
-
-// Telegram auth route
-app.post('/auth/telegram', async (req, res) => {
-  try {
-    const { id, first_name, username } = req.body;
-    
-    // Find or create user
-    let user = await User.findOne({ telegramId: id });
-    if (!user) {
-      user = new User({
-        telegramId: id,
-        username: username || first_name, // Use username if available, otherwise first_name
-      });
-      await user.save();
-      logger.info('New user created:', user);
-    } else {
-      logger.info('Existing user found:', user);
-    }
-
-    // Create token
-    const token = jwt.sign(
-      { id: user.telegramId, username: user.username },
-      config.jwtSecret,
-      { expiresIn: '24h' }
-    );
-
-    res.json({ token, user: { id: user.telegramId, username: user.username } });
-  } catch (error) {
-    logger.error('Error in /auth/telegram:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
-  }
-});
-
 // Error handling middleware
 app.use(errorHandler);
+
+// Initialize Telegram bot
+initTelegramBot();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -146,14 +83,11 @@ process.on('SIGTERM', () => {
   logger.info('Closing HTTP server.');
   server.close(() => {
     logger.info('HTTP server closed.');
-    mongoose.connection.close(false, () => {
-      logger.info('MongoDB connection closed.');
-      process.exit(0);
-    });
+    process.exit(0);
   });
 });
 
-const PORT = config.port;
+const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
 
 module.exports = app;
