@@ -5,32 +5,55 @@ const cors = require('cors');
 const compression = require('compression');
 const prometheus = require('prom-client');
 const rateLimit = require('express-rate-limit');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const logger = require('./utils/logger');
 const connectDB = require('./database/mongoose');
 const errorHandler = require('./middleware/errorHandler');
 const rateLimiter = require('./middleware/rateLimiter');
-const routes = require('./routes');
+const userRoutes = require('./routes/userRoutes');
 const { initTelegramBot } = require('./utils/telegramBot');
+const { authenticateTelegram } = require('./controllers/userController');
+const { validateTelegramAuth } = require('./validation/userValidation');
 
 const app = express();
 
 // Connect to MongoDB
 connectDB();
 
-// Middleware
-app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
+// Enhanced security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'cdnjs.cloudflare.com'],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin',
+  },
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.CORS_ORIGIN,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(rateLimiter);
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api', limiter);
 
@@ -55,15 +78,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
-app.use('/api', routes);
+// Telegram authentication route
+app.post('/auth/telegram', validateTelegramAuth, authenticateTelegram);
 
-// Proxy for Telegram Bot API
-app.use('/bot', createProxyMiddleware({ 
-  target: 'https://api.telegram.org',
-  changeOrigin: true,
-  pathRewrite: {'^/bot' : '/bot' + process.env.TELEGRAM_BOT_TOKEN}
-}));
+// Routes
+app.use('/api/users', userRoutes);
 
 // Expose metrics endpoint for Prometheus
 app.get('/metrics', async (req, res) => {
@@ -75,7 +94,7 @@ app.get('/metrics', async (req, res) => {
 app.use(errorHandler);
 
 // Initialize Telegram bot
-initTelegramBot();
+initTelegramBot().catch(error => logger.error('Failed to initialize Telegram bot:', error));
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -83,7 +102,11 @@ process.on('SIGTERM', () => {
   logger.info('Closing HTTP server.');
   server.close(() => {
     logger.info('HTTP server closed.');
-    process.exit(0);
+    // Close database connection
+    mongoose.connection.close(false, () => {
+      logger.info('MongoDB connection closed.');
+      process.exit(0);
+    });
   });
 });
 
