@@ -30,8 +30,8 @@ NeuroLov is an engaging GPU tapping game where users can tap to generate compute
 ## Installation
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/neurolov-backend.git
-   cd neurolov-backend
+   git clone 
+   cd Microapp
    ```
 
 2. Install dependencies:
