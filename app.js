@@ -5,6 +5,7 @@ const cors = require('cors');
 const compression = require('compression');
 const prometheus = require('prom-client');
 const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 
 const logger = require('./utils/logger');
 const connectDB = require('./database/mongoose');
@@ -17,6 +18,7 @@ const { validateTelegramAuth } = require('./validation/userValidation');
 const userController = require('./controllers/userController');
 
 // Import route files
+const config = require('./config');
 const userRoutes = require('./routes/userRoutes');
 const questRoutes = require('./routes/questRoutes');
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
@@ -24,6 +26,8 @@ const profileDashboardRoutes = require('./routes/profileDashboardRoutes');
 const referralRoutes = require('./routes/referralRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const achievementRoutes = require('./routes/achievementRoutes');
+
+const { initCronJobs } = require('./utils/cronJobs');
 
 const app = express();
 
