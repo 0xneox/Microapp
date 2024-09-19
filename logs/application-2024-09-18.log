@@ -1,0 +1,18 @@
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-17T18:44:02.040Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-17T18:44:02.055Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-17T18:44:04.030Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-17T19:41:24.711Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-17T19:41:24.720Z"}
+{"level":"info","message":"Start command received from user: 5856722860","service":"neurolov-backend","timestamp":"2024-09-17T19:41:25.898Z"}
+{"level":"info","message":"Start command received from user: 5856722860","service":"neurolov-backend","timestamp":"2024-09-17T19:41:25.900Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-17T19:41:26.351Z"}
+{"level":"info","message":"Start command received from user: 5473031631","service":"neurolov-backend","timestamp":"2024-09-17T20:17:55.187Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-18T12:47:00.440Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-18T12:47:00.452Z"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.cluster0.ax82voh.mongodb.net","level":"error","message":"MongoDB connection error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.ax82voh.mongodb.net","service":"neurolov-backend","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.ax82voh.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:252:17)","syscall":"querySrv","timestamp":"2024-09-18T12:47:00.570Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-18T13:33:52.037Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-18T13:33:52.044Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-18T13:33:53.871Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-18T15:10:29.841Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-18T15:10:29.852Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-18T15:11:08.280Z"}

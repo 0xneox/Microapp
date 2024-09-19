@@ -6,7 +6,7 @@ const questSchema = new mongoose.Schema({
   xpReward: { type: Number, required: true },
   type: { 
     type: String, 
-    enum: ['daily', 'weekly', 'twitter', 'discord', 'telegram'], 
+    enum: ['daily', 'weekly', 'twitter', 'discord', 'telegram', 'tap', 'level'], 
     required: true 
   },
   platform: {
@@ -16,13 +16,14 @@ const questSchema = new mongoose.Schema({
   },
   action: {
     type: String,
-    enum: ['follow', 'retweet', 'like', 'comment', 'join'],
-    required: function() { return ['twitter', 'discord', 'telegram'].includes(this.type); }
+    enum: ['follow', 'retweet', 'like', 'comment', 'join', 'tap', 'reach_level'],
+    required: true
   },
   targetId: { 
     type: String, 
     required: function() { return ['twitter', 'discord', 'telegram'].includes(this.type); }
   },
+  requirement: { type: Number, default: 1 },
   expiresAt: { type: Date, required: true },
 });
 

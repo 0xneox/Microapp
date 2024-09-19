@@ -1,17 +1,20 @@
 const crypto = require('crypto');
 
-// Generate a unique referral code
 const generateReferralCode = () => {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 };
 
-// Validate a referral code
 const validateReferralCode = (code) => {
   return typeof code === 'string' && code.length === 8 && /^[0-9A-F]{8}$/i.test(code);
 };
 
-module.exports = {
-  generateReferralCode,
-  validateReferralCode
+const calculateReferralReward = (level, xp) => {
+  const percentages = [0.1, 0.05, 0.025];
+  return Math.floor(xp * (percentages[level - 1] || 0));
 };
 
+module.exports = {
+  generateReferralCode,
+  validateReferralCode,
+  calculateReferralReward
+};

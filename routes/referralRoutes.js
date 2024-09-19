@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Referral = require('../models/Referral');
 const auth = require('../middleware/auth');
 const { generateReferralCode, validateReferralCode } = require('../utils/referralUtils');
-const { body, validationResult } = require('express-validator');
+const logger = require('../utils/logger');
 
+// Generate referral code
 router.post('/generate-code', auth, async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -17,19 +19,13 @@ router.post('/generate-code', auth, async (req, res) => {
 
     res.json({ referralCode: user.referralCode });
   } catch (error) {
+    logger.error('Error generating referral code:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-router.post('/apply-code', [
-  auth,
-  body('referralCode').isString().trim().notEmpty()
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
+// Apply referral code
+router.post('/apply-code', auth, async (req, res) => {
   try {
     const { referralCode } = req.body;
     if (!validateReferralCode(referralCode)) {
@@ -47,49 +43,45 @@ router.post('/apply-code', [
     referredUser.referredBy = referrer._id;
     referrer.referrals.push(referredUser._id);
 
-    // Update referral chain (limit to 3 levels)
-    const referralChain = [referrer._id, ...referrer.referralChain.slice(0, 2)];
-    referredUser.referralChain = referralChain;
+    // Create a new Referral document
+    const newReferral = new Referral({
+      referrer: referrer._id,
+      referred: referredUser._id,
+      code: referralCode,
+      tier: 1, // First-level referral
+    });
 
-    // Distribute XP to referral chain
-    const baseXP = 500;
-    const xpPercentages = [0.1, 0.05, 0.025];
-    for (let i = 0; i < referralChain.length; i++) {
-      const chainUser = await User.findById(referralChain[i]);
-      if (chainUser) {
-        const xpReward = i === 0 ? baseXP : Math.floor(referredUser.xp * xpPercentages[i]);
-        chainUser.xp += xpReward;
-        await chainUser.save();
-      }
-    }
-
-    await referredUser.save();
-    await referrer.save();
+    await Promise.all([referredUser.save(), referrer.save(), newReferral.save()]);
 
     res.json({ message: 'Referral code applied successfully' });
   } catch (error) {
+    logger.error('Error applying referral code:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
+// Get referral stats
 router.get('/stats', auth, async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: req.user.telegramId })
-      .populate('referrals', 'username xp computePower');
-    
+    const user = await User.findOne({ telegramId: req.user.telegramId }).populate('referrals');
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const referrals = await Referral.find({ referrer: user._id });
 
     const stats = {
       totalReferrals: user.referrals.length,
-      referralXP: user.referrals.reduce((total, referral) => total + referral.xp, 0),
-      topReferrals: user.referrals
-        .sort((a, b) => b.computePower - a.computePower)
-        .slice(0, 5)
-        .map(r => ({ username: r.username, computePower: r.computePower }))
+      referralCode: user.referralCode,
+      referralStats: referrals.map(r => ({
+        username: r.referred.username,
+        date: r.dateReferred,
+        tier: r.tier,
+        rewardsDistributed: r.totalRewardsDistributed
+      }))
     };
 
     res.json(stats);
   } catch (error) {
+    logger.error('Error fetching referral stats:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
-const config = require('../config');
 const User = require('../models/User');
+const logger = require('../utils/logger');
+const config = require('../config');
 
 const auth = async (req, res, next) => {
   try {
@@ -8,7 +9,7 @@ const auth = async (req, res, next) => {
     if (!token) throw new Error('No token provided');
 
     const decoded = jwt.verify(token, config.jwtSecret);
-    const user = await User.findOne({ telegramId: decoded.id }).select('-__v -password');
+    const user = await User.findOne({ telegramId: decoded.id });
 
     if (!user) throw new Error('User not found');
 
@@ -16,6 +17,7 @@ const auth = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
+    logger.error(`Authentication error: ${error.message}`);
     res.status(401).json({ error: 'Authentication failed', details: error.message });
   }
 };

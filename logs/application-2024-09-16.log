@@ -1,0 +1,16 @@
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-16T09:10:00.161Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-16T09:10:00.171Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-16T09:10:00.544Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-16T09:42:32.023Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-16T09:42:32.034Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-16T09:42:32.530Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-16T10:27:56.721Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-16T10:27:56.740Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-16T10:27:57.122Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-16T10:30:52.828Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-16T10:30:52.845Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-16T10:30:53.359Z"}
+{"level":"info","message":"Telegram bot initialized with long polling","service":"neurolov-backend","timestamp":"2024-09-16T14:27:22.060Z"}
+{"level":"info","message":"Server running on port 3000","service":"neurolov-backend","timestamp":"2024-09-16T14:27:22.072Z"}
+{"level":"info","message":"Telegram bot successfully initialized","service":"neurolov-backend","timestamp":"2024-09-16T14:27:22.073Z"}
+{"level":"info","message":"MongoDB connected successfully","service":"neurolov-backend","timestamp":"2024-09-16T14:27:25.080Z"}

@@ -5,7 +5,7 @@ const activitySchema = new mongoose.Schema({
   type: { 
     type: String, 
     required: true, 
-    enum: ['tap', 'quest_complete', 'referral', 'gpu_upgrade'],
+    enum: ['tap', 'quest_complete', 'referral', 'gpu_upgrade', 'boost_used', 'achievement_unlocked', 'daily_claim'],
     index: true
   },
   timestamp: { type: Date, default: Date.now, index: true },
