@@ -39,18 +39,6 @@ NeuroLov is an engaging GPU tapping game where users can tap to generate compute
    npm install
    ```
 
-## Configuration
-1. Create a `.env` file in the root directory with the following content:
-   ```
-   NODE_ENV=development
-   PORT=3000
-   MONGODB_URI=your_mongodb_connection_string
-   REDIS_URL=your_redis_url
-   JWT_SECRET=your_jwt_secret
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   CORS_ORIGIN=http://localhost:3000
-   ```
-
 2. Replace the placeholder values with your actual configuration details.
 
 ## Running the Application
@@ -64,8 +52,6 @@ NeuroLov is an engaging GPU tapping game where users can tap to generate compute
    npm run dev
    ```
 
-## API Documentation
-Detailed API documentation can be found in the [API_DOCS.md](./API_DOCS.md) file.
 
 
 
