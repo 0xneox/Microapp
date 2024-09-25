@@ -5,13 +5,15 @@ const auth = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 const achievements = [
-  { id: 'firstTap', name: 'First Tap', xpReward: 10, requirement: 1 },
-  { id: 'tenTaps', name: '10 Taps', xpReward: 100, requirement: 10 },
-  { id: 'hundredTaps', name: '100 Taps', xpReward: 500, requirement: 100 },
-  { id: 'thousandTaps', name: '1000 Taps', xpReward: 1000, requirement: 1000 },
-  { id: 'level5', name: 'Reach Level 5', xpReward: 2000, requirement: 5 },
-  { id: 'level10', name: 'Reach Level 10', xpReward: 5000, requirement: 10 },
-  // Add more achievements here
+  { id: 'noviceMiner', name: 'Novice Miner', description: "You've taken your first steps into the world of GPU mining", xpReward: 100, requirement: 1, type: 'tap' },
+  { id: 'socialButterfly', name: 'Social Butterfly', description: "Connected on all social platforms. You're officially part of the community", xpReward: 500, requirement: 3, type: 'social' },
+  { id: 'tapMaster', name: 'Tap Master', description: "Your fingers are on fire! 1 million taps and counting.", xpReward: 10000, requirement: 1000000, type: 'tap' },
+  { id: 'referralGuru', name: 'Referral Guru', description: "Your network is your net worth. 100 referrals reached!", xpReward: 5000, requirement: 100, type: 'referral' },
+  { id: 'powerSurge', name: 'Power Surge', description: "Reached Computing Power Level 10. Your rig is unstoppable!", xpReward: 2000, requirement: 10, type: 'level' },
+  { id: 'consistentMiner', name: 'Consistent Miner', description: "30-day login streak. Your dedication is admirable!", xpReward: 3000, requirement: 30, type: 'login' },
+  { id: 'rigCustomizer', name: 'Rig Customizer', description: "Created a truly unique mining setup. It's a work of art!", xpReward: 1000, requirement: 1, type: 'customization' },
+  { id: 'cryptoPioneer', name: 'Crypto Pioneer', description: "Successfully mined your first full coin. To the moon!", xpReward: 5000, requirement: 1, type: 'mining' },
+  { id: 'legendaryTapper', name: 'Legendary Tapper', description: "Reached the #1 spot on the global leaderboard. You're a legend!", xpReward: 20000, requirement: 1, type: 'leaderboard' },
 ];
 
 router.get('/', auth, async (req, res) => {
@@ -23,7 +25,7 @@ router.get('/', auth, async (req, res) => {
     const allAchievements = achievements.map(achievement => ({
       ...achievement,
       completed: userAchievements.some(ua => ua.id === achievement.id && ua.completed),
-      progress: achievement.id.startsWith('level') ? user.level : user.totalTaps
+      progress: getAchievementProgress(user, achievement)
     }));
 
     res.json(allAchievements);
@@ -47,7 +49,7 @@ router.post('/claim/:achievementId', auth, async (req, res) => {
       return res.status(400).json({ message: 'Achievement already claimed' });
     }
 
-    const progress = achievement.id.startsWith('level') ? user.level : user.totalTaps;
+    const progress = getAchievementProgress(user, achievement);
     if (progress < achievement.requirement) {
       return res.status(400).json({ message: 'Achievement requirements not met' });
     }
@@ -68,5 +70,28 @@ router.post('/claim/:achievementId', auth, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+function getAchievementProgress(user, achievement) {
+  switch (achievement.type) {
+    case 'tap':
+      return user.totalTaps || 0;
+    case 'social':
+      return (user.twitterConnected ? 1 : 0) + (user.telegramConnected ? 1 : 0) + (user.discordConnected ? 1 : 0);
+    case 'referral':
+      return user.referrals ? user.referrals.length : 0;
+    case 'level':
+      return user.level || 0;
+    case 'login':
+      return user.loginStreak || 0;
+    case 'customization':
+      return user.hasCustomizedRig ? 1 : 0;
+    case 'mining':
+      return user.fullCoinsMined || 0;
+    case 'leaderboard':
+      return user.highestLeaderboardRank === 1 ? 1 : 0;
+    default:
+      return 0;
+  }
+}
 
 module.exports = router;

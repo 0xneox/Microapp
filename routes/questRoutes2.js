@@ -36,8 +36,8 @@ router.post('/claim/:questId', auth, async (req, res) => {
     } else if (quest.type === 'telegram') {
       const telegramQuest = await TelegramQuest.findOne({ questId: quest._id });
       verified = await verifyTelegramQuest(quest.action, telegramQuest.targetId, user.telegramId);
-    } else if (['daily', 'weekly', 'discord', 'tap', 'level'].includes(quest.type)) {
-      // Implement verification for other quest types
+    } else if (quest.type === 'daily' || quest.type === 'weekly') {
+      // Implement verification for daily and weekly quests
       verified = true; // Placeholder, implement actual verification logic
     }
 

@@ -4,7 +4,6 @@ const config = require('../config');
 
 const userSchema = new mongoose.Schema({
   telegramId: { type: String, required: true, unique: true, index: true },
-  // twitterId: { type: String, unique: true, sparse: true },
   username: { type: String, required: true, index: true },
   firstName: { type: String },
   lastName: { type: String },
@@ -38,16 +37,21 @@ const userSchema = new mongoose.Schema({
   lastDailyClaimDate: { type: Date },
   checkInStreak: { type: Number, default: 0 },
   completedQuests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Quest' }],
-  checkInStreak: { type: Number, default: 0 },
- 
   notifications: { type: Boolean, default: true },
   language: { type: String, default: 'en' },
   theme: { type: String, default: 'dark' },
   soundEnabled: { type: Boolean, default: true },
   vibrationEnabled: { type: Boolean, default: true },
-  isTeamMember: { type: Boolean, default: false }
-
+  isTeamMember: { type: Boolean, default: false },
   
+  // New fields for achievement tracking
+  twitterConnected: { type: Boolean, default: false },
+  telegramConnected: { type: Boolean, default: true }, // Assumed true since they're using Telegram
+  discordConnected: { type: Boolean, default: false },
+  loginStreak: { type: Number, default: 0 },
+  hasCustomizedRig: { type: Boolean, default: false },
+  fullCoinsMined: { type: Number, default: 0 },
+  highestLeaderboardRank: { type: Number, default: Infinity }
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },
@@ -73,6 +77,7 @@ userSchema.methods.toJSON = function() {
   delete obj.__v;
   return obj;
 };
+
 userSchema.methods.shouldUpgradeGPU = function() {
   return this.xp >= this.gpuLevel * 25000;
 };
@@ -84,6 +89,26 @@ userSchema.methods.upgradeGPU = function() {
     return true;
   }
   return false;
+};
+
+// New method to update login streak
+userSchema.methods.updateLoginStreak = function() {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+  
+  if (this.lastDailyClaimDate && this.lastDailyClaimDate >= yesterday) {
+    this.loginStreak += 1;
+  } else {
+    this.loginStreak = 1;
+  }
+  
+  this.lastDailyClaimDate = now;
+  this.checkInStreak = Math.max(this.checkInStreak, this.loginStreak);
+};
+
+// New method to update leaderboard rank
+userSchema.methods.updateLeaderboardRank = function(newRank) {
+  this.highestLeaderboardRank = Math.min(this.highestLeaderboardRank, newRank);
 };
 
 module.exports = mongoose.model('User', userSchema);
