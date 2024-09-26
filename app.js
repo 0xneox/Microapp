@@ -115,10 +115,10 @@ app.get('/metrics', async (req, res) => {
 });
 
 // Initialize Telegram bot
-const botPromise = initTelegramBot().catch(error => {
-  logger.error('Failed to initialize Telegram bot:', error);
-  return null;
-});
+// const botPromise = initTelegramBot().catch(error => {
+//   logger.error('Failed to initialize Telegram bot:', error);
+//   return null;
+// });
 
 // Telegram bot webhook route
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
