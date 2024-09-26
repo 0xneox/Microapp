@@ -1,6 +1,6 @@
-# Updated Core Game Mechanics and Progression System
+# Game Mechanics 
 
-## XP (Experience Points)
+## XP 
 
 XP is the primary measure of a user's progress in the game.
 
@@ -127,7 +127,8 @@ Encourages user growth and rewards active referrers.
   - 2nd level: 5% of referred user's XP gains
   - 3rd level: 2.5% of referred user's XP gains
 
-## Currency System (Optional)
+## Optional: In app purchases
+   - Boost, Skins, CPLevel etc.
 
 
 
