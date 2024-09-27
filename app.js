@@ -50,12 +50,12 @@ app.use(helmet({
 }));
 
 // CORS configuration
-app.use(cors({
-  origin: [process.env.CORS_ORIGIN, 'https://web.telegram.org'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Telegram-Data'],
-}));
+// app.use(cors({
+//   origin: [process.env.CORS_ORIGIN, 'https://web.telegram.org'],
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+//   allowedHeaders: ['Content-Type', 'Authorization', 'Telegram-Data'],
+// }));
 
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
@@ -115,10 +115,10 @@ app.get('/metrics', async (req, res) => {
 });
 
 // Initialize Telegram bot
-// const botPromise = initTelegramBot().catch(error => {
-//   logger.error('Failed to initialize Telegram bot:', error);
-//   return null;
-// });
+const botPromise = initTelegramBot().catch(error => {
+  logger.error('Failed to initialize Telegram bot:', error);
+  return null;
+});
 
 // Telegram bot webhook route
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
@@ -129,6 +129,9 @@ app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
       logger.error('Telegram bot not initialized');
     }
     res.sendStatus(200);
+  })
+  .catch(error => {
+    console.log("error in bot init.", error);
   });
 });
 
