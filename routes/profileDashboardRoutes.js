@@ -23,6 +23,7 @@ router.get('/', auth, async (req, res) => {
         referredBy: user.referredBy ? user.referredBy.username : null,
         referrals: user.referrals.map(r => r.username),
         lastDailyClaimDate: user.lastDailyClaimDate,
+        id: user.telegramId
       },
       quests: activeQuests,
       cooldownStatus: user.cooldownEndTime > Date.now() ? {

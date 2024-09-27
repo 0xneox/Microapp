@@ -30,7 +30,7 @@ router.get('/:type', [
     const leaderboard = await User.find(query)
       .sort(sort)
       .limit(100)
-      .select('username computePower compute');
+      .select('username computePower compute xp');
 
     res.json(leaderboard);
   } catch (error) {

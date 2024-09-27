@@ -12,8 +12,20 @@ const { body, validationResult } = require('express-validator');
 // Get all quests
 router.get('/', auth, async (req, res) => {
   try {
-    const quests = await Quest.find({ expiresAt: { $gt: new Date() } });
-    res.json(quests);
+    const completedQuests = req?.user?.completedQuests;
+    console.log(completedQuests);
+    // const quests = await Quest.find({ expiresAt: { $gt: new Date() } });
+    // Aggregation for to find if completed
+    const allQuests = await Quest.aggregate([
+      {
+        $addFields: {
+          claimed: {
+            $in: ['$_id', completedQuests] // Check if quest ID is in completedQuests
+          }
+        }
+      }
+    ]);
+    res.json(allQuests);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching quests', error: error.message });
   }
@@ -30,13 +42,15 @@ router.post('/claim/:questId', auth, async (req, res) => {
     if (!quest) return res.status(404).json({ message: 'Quest not found' });
 
     let verified = false;
-    if (quest.type === 'twitter') {
-      const twitterQuest = await TwitterQuest.findOne({ questId: quest._id });
-      verified = await verifyTwitterQuest(quest.action, twitterQuest.targetId, user.twitterId);
-    } else if (quest.type === 'telegram') {
-      const telegramQuest = await TelegramQuest.findOne({ questId: quest._id });
-      verified = await verifyTelegramQuest(quest.action, telegramQuest.targetId, user.telegramId);
-    } else if (['daily', 'weekly', 'discord', 'tap', 'level'].includes(quest.type)) {
+    // if (quest.type === 'twitter') {
+    //   const twitterQuest = await TwitterQuest.findOne({ questId: quest._id });
+    //   verified = await verifyTwitterQuest(quest.action, twitterQuest.targetId, user.twitterId);
+    // }
+    //  if (quest.type === 'telegram') {
+    //   const telegramQuest = await TelegramQuest.findOne({ questId: quest._id });
+    //   verified = await verifyTelegramQuest(quest.action, telegramQuest.targetId, user.telegramId);
+    // } else
+     if (['daily', 'weekly', 'discord', 'tap', 'level', 'twitter', 'leaderboard', 'telegram'].includes(quest.type)) {
       // Implement verification for other quest types
       verified = true; // Placeholder, implement actual verification logic
     }
