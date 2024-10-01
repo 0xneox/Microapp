@@ -52,6 +52,7 @@ router.post('/apply-code', auth, async (req, res) => {
     });
 
     await Promise.all([referredUser.save(), referrer.save(), newReferral.save()]);
+    await referredUser.updateReferralChain();
 
     res.json({ message: 'Referral code applied successfully' });
   } catch (error) {
@@ -70,6 +71,7 @@ router.get('/stats', auth, async (req, res) => {
 
     const stats = {
       totalReferrals: user.referrals.length,
+      totalReferralXP: user.totalReferralXP,
       referralCode: user.referralCode,
       referralStats: referrals.map(r => ({
         username: r.referred.username,
