@@ -7,9 +7,9 @@ const referralSchema = new mongoose.Schema({
   tier: { type: Number, required: true, min: 1, max: 3 },
   dateReferred: { type: Date, default: Date.now },
   totalRewardsDistributed: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true }
 });
 
 referralSchema.index({ referrer: 1, dateReferred: -1 });
 
 module.exports = mongoose.model('Referral', referralSchema);
-
