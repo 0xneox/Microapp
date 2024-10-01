@@ -3,7 +3,7 @@ const Leaderboard = require('../models/Leaderboard');
 const { verifyTelegramWebAppData } = require('../utils/telegramUtils');
 const logger = require('../utils/logger');
 const { calculateReferralReward } = require('../utils/referralUtils');
-
+const Referral = require('../models/Referral');3
 
 exports.authenticateTelegram = async (req, res) => {
   try {
@@ -205,7 +205,7 @@ exports.tap = async (req, res) => {
     // Distribute referral XP
     await distributeReferralXP(user._id, xpGained);
 
-    // Update leaderboards (make sure you have the Leaderboard model imported)
+    // Update leaderboards
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const weekStart = new Date(today);
@@ -321,8 +321,8 @@ exports.upgradeGPU = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Implement GPU upgrade logic here
-    // This is a placeholder implementation
+    //  GPU upgrade logic 
+
     user.computePower += 1;
     await user.save();
 
