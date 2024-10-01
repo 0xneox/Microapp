@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
   referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referralCode: { type: String, unique: true, sparse: true, index: true },
   referralChain: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  totalReferralXP: { type: Number, default: 0 },
   achievements: [{
     id: String,
     completed: Boolean,
@@ -44,7 +45,7 @@ const userSchema = new mongoose.Schema({
   vibrationEnabled: { type: Boolean, default: true },
   isTeamMember: { type: Boolean, default: false },
   
-  // New fields for achievement tracking
+  //achievement tracking
   twitterConnected: { type: Boolean, default: false },
   telegramConnected: { type: Boolean, default: true }, // Assumed true since they're using Telegram
   discordConnected: { type: Boolean, default: false },
@@ -91,7 +92,7 @@ userSchema.methods.upgradeGPU = function() {
   return false;
 };
 
-// New method to update login streak
+// update login streak
 userSchema.methods.updateLoginStreak = function() {
   const now = new Date();
   const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
@@ -106,9 +107,36 @@ userSchema.methods.updateLoginStreak = function() {
   this.checkInStreak = Math.max(this.checkInStreak, this.loginStreak);
 };
 
-// New method to update leaderboard rank
+// update leaderboard rank
 userSchema.methods.updateLeaderboardRank = function(newRank) {
   this.highestLeaderboardRank = Math.min(this.highestLeaderboardRank, newRank);
 };
+
+userSchema.methods.addReferral = function(referredUserId) {
+  if (!this.referrals.includes(referredUserId)) {
+    this.referrals.push(referredUserId);
+  }
+};
+
+userSchema.methods.updateReferralChain = async function() {
+  if (!this.referredBy) return;
+
+  const referralChain = [];
+  let currentReferrer = await User.findById(this.referredBy);
+  
+  while (currentReferrer && referralChain.length < 3) {
+    referralChain.push(currentReferrer._id);
+    currentReferrer = await User.findById(currentReferrer.referredBy);
+  }
+
+  this.referralChain = referralChain;
+};
+
+userSchema.pre('save', async function(next) {
+  if (this.isModified('referredBy')) {
+    await this.updateReferralChain();
+  }
+  next();
+});
 
 module.exports = mongoose.model('User', userSchema);
