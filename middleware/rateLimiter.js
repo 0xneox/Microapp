@@ -1,11 +1,23 @@
-const rateLimit = require('express-rate-limit');
+const { RateLimiterRedis } = require('rate-limiter-flexible');
+const createRedisClient = require('../utils/redisClient');
 
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 min
-  max: 300, // Limit  IP to 300 requests/min
-  message: 'Too many taps! Please wait a moment before tapping again.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+const redisClient = createRedisClient();
+
+const rateLimiter = new RateLimiterRedis({
+  storeClient: redisClient,
+  keyPrefix: 'middleware',
+  points: 10, // 10 requests
+  duration: 1, // per 1 second by IP
 });
 
-module.exports = limiter;
+const rateLimiterMiddleware = (req, res, next) => {
+  rateLimiter.consume(req.ip)
+    .then(() => {
+      next();
+    })
+    .catch(() => {
+      res.status(429).send('Too Many Requests');
+    });
+};
+
+module.exports = rateLimiterMiddleware;
