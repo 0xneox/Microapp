@@ -4,6 +4,10 @@ const { verifyTelegramWebAppData } = require('../utils/telegramUtils');
 const logger = require('../utils/logger');
 const { calculateReferralReward } = require('../utils/referralUtils');
 const Referral = require('../models/Referral');3
+const { cacheUser, getCachedUser } = require('../utils/redisCache');
+const { queueLeaderboardUpdate } = require('../jobs/jobQueue');
+
+
 
 exports.authenticateTelegram = async (req, res) => {
   try {
@@ -110,27 +114,65 @@ exports.claimDailyXP = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) {
-      logger.warn(`User not found for daily XP claim: ${req.user.telegramId}`);
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.canClaimDailyXP()) {
-      const xpGained = 100;
-      user.xp += xpGained;
-      user.lastDailyClaimDate = new Date();
-      user.checkInStreak += 1;
-      await user.save();
-      logger.info(`Daily XP claimed: ${user.telegramId}, XP gained: ${xpGained}`);
-      res.json({ message: 'Daily XP claimed successfully', xpGained, newTotalXp: user.xp });
-    } else {
-      logger.warn(`Attempted to claim XP too soon: ${user.telegramId}`);
-      res.status(400).json({ message: 'Daily XP already claimed' });
+    const now = new Date();
+    const lastClaim = new Date(user.lastDailyClaimDate);
+    const timeDiff = now - lastClaim;
+    const hoursSinceLastClaim = timeDiff / (1000 * 60 * 60);
+
+    if (hoursSinceLastClaim < 24) {
+      return res.status(400).json({ 
+        message: 'Daily XP already claimed',
+        nextClaimTime: new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000)
+      });
     }
+
+    const xpGained = 100;
+    user.xp += xpGained;
+    user.lastDailyClaimDate = now;
+    user.checkInStreak += 1;
+    await user.save();
+
+    res.json({ 
+      message: 'Daily XP claimed successfully', 
+      xpGained, 
+      newTotalXp: user.xp,
+      checkInStreak: user.checkInStreak
+    });
   } catch (error) {
     logger.error(`Claim daily XP error: ${error.message}`);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+exports.checkDailyXPClaimable = async (req, res) => {
+  try {
+    const user = await User.findOne({ telegramId: req.user.telegramId });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const now = new Date();
+    const lastClaim = new Date(user.lastDailyClaimDate);
+    const timeDiff = now - lastClaim;
+    const hoursSinceLastClaim = timeDiff / (1000 * 60 * 60);
+
+    const isClaimable = hoursSinceLastClaim >= 24;
+    const nextClaimTime = isClaimable ? now : new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000);
+
+    res.json({
+      isClaimable,
+      nextClaimTime,
+      checkInStreak: user.checkInStreak
+    });
+  } catch (error) {
+    logger.error(`Check daily XP claimable error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 const distributeReferralXP = async (userId, xpGained) => {
   try {
     const user = await User.findById(userId).populate('referredBy');
@@ -163,79 +205,44 @@ const distributeReferralXP = async (userId, xpGained) => {
 
 exports.tap = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: req.user.telegramId });
+    const userId = req.user.telegramId;
+    let user = await getCachedUser(userId);
+
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      user = await User.findOne({ telegramId: userId });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      await cacheUser(userId, user);
     }
 
-    const now = new Date();
-    if (user.cooldownEndTime && now < user.cooldownEndTime) {
-      logger.info(`Tap rejected due to cooldown: ${user.telegramId}`);
-      return res.status(400).json({ 
-        message: 'Cooling down', 
-        cooldownEndTime: user.cooldownEndTime
-      });
+    const tapResult = await user.tap();
+
+    if (!tapResult.success) {
+      return res.status(400).json({ message: tapResult.message });
     }
 
-    user.totalTaps += 1;
-    const xpGained = user.computePower;
-    user.xp += xpGained;
-    user.compute += xpGained;
-    user.lastTapTime = now;
+    await cacheUser(userId, user);
 
-    if (user.totalTaps % 500 === 0) {
-      user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
-      logger.info(`Cooldown initiated for user: ${user.telegramId}`);
-    }
+    // Queue leaderboard update
+    await queueLeaderboardUpdate(userId, tapResult.newTotalXp);
 
-    // Check for GPU upgrade
-    if (user.xp >= (user.gpuLevel + 1) * 25000) {
-      user.gpuLevel += 1;
-      user.computePower += 1;
-      logger.info(`GPU upgraded for user ${user.telegramId}. New level: ${user.gpuLevel}`);
-    }
+    // Distribute referral XP in the background
+    distributeReferralXP(user._id, tapResult.xpGained).catch(error => 
+      logger.error(`Error distributing referral XP: ${error.message}`)
+    );
 
-    // Update boost count
-    if (user.xp % 2000 === 0) {
-      user.boostCount += 1;
-    }
-
-    await user.save();
-
-    // Distribute referral XP
-    await distributeReferralXP(user._id, xpGained);
-
-    // Update leaderboards
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay());
-    const allTimeDate = new Date(2000, 0, 1);
-
-    await Promise.all([
-      Leaderboard.updateEntry('daily', today, user._id, user.username, user.compute),
-      Leaderboard.updateEntry('weekly', weekStart, user._id, user.username, user.compute),
-      Leaderboard.updateEntry('all-time', allTimeDate, user._id, user.username, user.computePower)
-    ]);
-
-    logger.info(`Successful tap: ${user.telegramId}`);
     res.json({ 
       message: 'Tap successful', 
-      user: {
-        xp: user.xp,
-        compute: user.compute,
-        totalTaps: user.totalTaps,
-        computePower: user.computePower,
-        gpuLevel: user.gpuLevel,
-        cooldownEndTime: user.cooldownEndTime,
-        boostCount: user.boostCount
-      }
+      xpGained: tapResult.xpGained,
+      newTotalXp: tapResult.newTotalXp
     });
   } catch (error) {
-    logger.error(`Tap error: ${error.message}`);
+    logger.error('Tap error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 exports.boost = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -321,8 +328,8 @@ exports.upgradeGPU = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    //  GPU upgrade logic 
-
+    // Implement GPU upgrade logic here
+    // This is a placeholder implementation
     user.computePower += 1;
     await user.save();
 
