@@ -15,8 +15,8 @@ const userSchema = new mongoose.Schema({
   level: { type: Number, default: 0 },
   gpuLevel: { type: Number, default: 1 },
   totalTaps: { type: Number, default: 0 },
-  lastTapTime: { type: Date },
-  cooldownEndTime: { type: Date },
+  lastTapTime: { type: Date, index: true  },
+  cooldownEndTime: { type: Date, index: true },
   boostCount: { type: Number, default: 0 },
   lastBoostTime: { type: Date },
   referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
@@ -58,6 +58,31 @@ const userSchema = new mongoose.Schema({
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
+
+// Add compound index for efficient querying
+userSchema.index({ telegramId: 1, lastTapTime: -1 });
+
+// Optimize the tap method
+userSchema.methods.tap = async function() {
+  const now = new Date();
+  if (this.cooldownEndTime && now < this.cooldownEndTime) {
+    return { success: false, message: 'Cooling down' };
+  }
+
+  this.totalTaps += 1;
+  const xpGained = this.computePower;
+  this.xp += xpGained;
+  this.compute += xpGained;
+  this.lastTapTime = now;
+
+  if (this.totalTaps % 500 === 0) {
+    this.cooldownEndTime = new Date(now.getTime() + 10 * 1000);
+  }
+
+  await this.save();
+
+  return { success: true, xpGained, newTotalXp: this.xp };
+};
 
 userSchema.methods.canClaimDailyXP = function() {
   if (!this.lastDailyClaimDate) {
