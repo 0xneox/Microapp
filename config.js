@@ -6,7 +6,7 @@ module.exports = {
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
-  corsOrigin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['https://neuro-orpin.vercel.app'],
+  corsOrigin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['https://d2a5bjgbs6ggw2.cloudfront.net/invite'],
   serverUrl: process.env.SERVER_URL,
   webAppUrl: process.env.WEB_APP_URL,
 };
