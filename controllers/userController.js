@@ -1,10 +1,11 @@
+
 const User = require('../models/User');
 const Leaderboard = require('../models/Leaderboard');
 const { verifyTelegramWebAppData } = require('../utils/telegramUtils');
 const logger = require('../utils/logger');
 const { calculateReferralReward } = require('../utils/referralUtils');
 const Referral = require('../models/Referral');3
-const { cacheUser, getCachedUser } = require('../utils/redisCache');
+const { getCachedUser, updateCachedUser } = require('../utils/userCache');
 const { queueLeaderboardUpdate } = require('../jobs/jobQueue');
 
 
@@ -12,7 +13,7 @@ const { queueLeaderboardUpdate } = require('../jobs/jobQueue');
 exports.authenticateTelegram = async (req, res) => {
   try {
     logger.info('Received authentication request');
-    const { initData } = req.body;
+    const initData = req.header('X-Telegram-Init-Data');
     logger.debug('InitData:', initData);
     
     if (!initData) {
@@ -206,43 +207,55 @@ const distributeReferralXP = async (userId, xpGained) => {
 exports.tap = async (req, res) => {
   try {
     const userId = req.user.telegramId;
-    let user = await getCachedUser(userId);
+    let user = await getCachedUser(userId, async (id) => await User.findOne({ telegramId: id }));
 
     if (!user) {
-      user = await User.findOne({ telegramId: userId });
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      await cacheUser(userId, user);
+      logger.warn(`User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    const tapResult = await user.tap();
-
-    if (!tapResult.success) {
-      return res.status(400).json({ message: tapResult.message });
+    const now = new Date();
+    if (user.cooldownEndTime && now < user.cooldownEndTime) {
+      logger.info(`Cooldown active for user ${userId} until ${user.cooldownEndTime}`);
+      return res.status(400).json({ message: 'Cooling down', cooldownEndTime: user.cooldownEndTime });
     }
 
-    await cacheUser(userId, user);
+    const xpBefore = user.xp;
+    const xpGained = user.computePower;
+    user.xp += xpGained;
+    user.compute += xpGained;
+    user.totalTaps += 1;
+    user.lastTapTime = now;
 
-    // Queue leaderboard update
-    await queueLeaderboardUpdate(userId, tapResult.newTotalXp);
+    if (user.totalTaps % 500 === 0) {
+      user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
+      logger.info(`Cooldown initiated for user ${userId}`);
+    }
 
-    // Distribute referral XP in the background
-    distributeReferralXP(user._id, tapResult.xpGained).catch(error => 
-      logger.error(`Error distributing referral XP: ${error.message}`)
-    );
+    await user.save();
+    updateCachedUser(userId, user);
+
+    logger.info(`Tap successful for user ${userId}. XP: ${xpBefore} -> ${user.xp}`);
 
     res.json({ 
       message: 'Tap successful', 
-      xpGained: tapResult.xpGained,
-      newTotalXp: tapResult.newTotalXp
+      xpGained,
+      xpBefore,
+      newTotalXp: user.xp,
+      totalTaps: user.totalTaps,
+      computePower: user.computePower,
+      cooldownEndTime: user.cooldownEndTime,
+      rpm: calculateRPM(user.lastTapTime, now)
     });
   } catch (error) {
-    logger.error('Tap error:', error);
+    logger.error(`Tap error for user ${req.user.telegramId}:`, error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
+function calculateRPM(lastTapTime, currentTime) {
+  const timeDiff = (currentTime - lastTapTime) / 1000; // in seconds
+  return timeDiff > 0 ? Math.round(60 / timeDiff) : 0;
+}
 exports.boost = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -316,6 +329,30 @@ exports.getDailyPoints = async (req, res) => {
     res.json({ dailyPoints: user.dailyPoints });
   } catch (error) {
     logger.error(`Get daily points error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.getUserStats = async (req, res) => {
+  try {
+    const userId = req.user.telegramId;
+    const user = await User.findOne({ telegramId: userId });
+
+    if (!user) {
+      logger.warn(`User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      xp: user.xp,
+      compute: user.compute,
+      totalTaps: user.totalTaps,
+      computePower: user.computePower,
+      cooldownEndTime: user.cooldownEndTime,
+      lastTapTime: user.lastTapTime
+    });
+  } catch (error) {
+    logger.error(`Error fetching user stats for ${req.user.telegramId}:`, error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
