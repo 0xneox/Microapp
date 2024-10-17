@@ -51,12 +51,12 @@ app.use(helmet({
   },
 }));
 
-// CORS configuration
+// CORS config
 app.use(cors({
-  origin: [process.env.CORS_ORIGIN, 'https://web.telegram.org'],
+  origin: [process.env.CORS_ORIGIN,'http://localhost:3000', 'https://web.telegram.org', 'https://d14amhlx1vsse8.cloudfront.net'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Telegram-Data'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data']
 }));
 
 app.use(compression());

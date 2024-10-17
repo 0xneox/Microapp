@@ -10,27 +10,35 @@ const initTelegramBot = () => {
 
       logger.info('Telegram bot initialized with long polling');
 
-      // Welcome message
+      // Shortened welcome message
       const welcomeMessage = `Welcome to Neurolov Compute Bot! 🚀🧠
 
-Step into the future of decentralized computing with Neurolov, where your idle processing power becomes a valuable asset. Our innovative platform allows you to contribute to cutting-edge AI and blockchain projects while earning rewards.
+Contribute to AI and blockchain projects while earning rewards:
 
-In this micro-app, you can:
+🖥️ Tap to Compute
+📈 Upgrade GPU
+🏆 Complete Quests
+🌟 Climb Leaderboard
+👥 Invite Friends
+⚙️ Customize Settings
 
-🖥️ Tap to Compute: Activate your virtual GPU and start generating compute power with just a tap!
-📈 Upgrade Your GPU: Enhance your computing capabilities and earn more rewards.
-🏆 Complete Quests: Take on daily and weekly challenges to boost your XP and unlock achievements.
-🌟 Climb the Leaderboard: Compete with users worldwide and showcase your computing prowess.
-👥 Invite Friends: Grow the Neurolov community and earn referral bonuses.
-⚙️ Customize Settings: Tailor your experience with personalized notifications and themes.
-
-As you progress, you'll unlock new levels, increase your compute power, and earn more XP. Your contributions help power the next generation of decentralized applications and AI research.
-
-Join us in revolutionizing the world of distributed computing. Let's compute, earn, and innovate together with Neurolov! 💻💡
-
-Get started now and watch your virtual GPU come to life! 🚀`;
+Start now and revolutionize distributed computing with Neurolov! 💻💡`;
 
       // Bot commands
+      const commands = [
+        { command: 'start', description: 'Start the bot and open Web App' },
+        { command: 'help', description: 'Show help message' },
+        { command: 'stats', description: 'View your current stats' },
+        { command: 'compute', description: 'Start computing' },
+        { command: 'upgrade', description: 'Upgrade your GPU' },
+        { command: 'quests', description: 'View available quests' },
+        { command: 'leaderboard', description: 'Check the leaderboard' },
+        { command: 'invite', description: 'Get your referral link' },
+        { command: 'settings', description: 'Adjust your settings' }
+      ];
+
+      bot.setMyCommands(commands);
+
       bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
         const userId = msg.from.id.toString();
@@ -50,13 +58,8 @@ Get started now and watch your virtual GPU come to life! 🚀`;
           const token = user.generateAuthToken();
       
           if (!user.hasSeenWelcomeMessage) {
-            // Send the welcome image
-            await bot.sendPhoto(chatId, 'https://bayanbox.ir/view/4187791167840408524/Telegram-Banner.jpg', { caption: 'Welcome to Neurolov Compute Bot!' });
-            
-            // Send the welcome message
+            await bot.sendPhoto(chatId, 'https://i.ibb.co/PYWbpxz/photo-2024-10-11-16-18-3.jpg', { caption: 'Welcome to Neurolov Compute Bot!' });
             await bot.sendMessage(chatId, welcomeMessage);
-            
-            // Update user's hasSeenWelcomeMessage flag
             user.hasSeenWelcomeMessage = true;
             await user.save();
           }
@@ -78,12 +81,13 @@ Get started now and watch your virtual GPU come to life! 🚀`;
 
       bot.onText(/\/help/, (msg) => {
         const chatId = msg.chat.id;
-        bot.sendMessage(chatId, 'This bot allows you to access Neurolov Compute Bot. Use these commands:\n\n/start - Open the Web App\n/stats - View your current stats\n/help - Show this help message');
+        const helpMessage = commands.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n');
+        bot.sendMessage(chatId, `Available commands:\n\n${helpMessage}`);
       });
 
       bot.onText(/\/stats/, async (msg) => {
         const chatId = msg.chat.id;
-        const userId = msg.from.id.toString(); // Ensure userId is a string
+        const userId = msg.from.id.toString();
 
         try {
           const user = await User.findOne({ telegramId: userId });
@@ -102,6 +106,31 @@ Get started now and watch your virtual GPU come to life! 🚀`;
           logger.error('Error in /stats command:', error);
           bot.sendMessage(chatId, 'An error occurred while fetching your stats. Please try again later.');
         }
+      });
+
+      // Add handlers for other commands
+      bot.onText(/\/compute/, (msg) => {
+        bot.sendMessage(msg.chat.id, "Open the Web App to start computing!");
+      });
+
+      bot.onText(/\/upgrade/, (msg) => {
+        bot.sendMessage(msg.chat.id, "Upgrade your GPU in the Web App to increase your compute power!");
+      });
+
+      bot.onText(/\/quests/, (msg) => {
+        bot.sendMessage(msg.chat.id, "Check available quests in the Web App to earn more rewards!");
+      });
+
+      bot.onText(/\/leaderboard/, (msg) => {
+        bot.sendMessage(msg.chat.id, "View the leaderboard in the Web App to see your ranking!");
+      });
+
+      bot.onText(/\/invite/, (msg) => {
+        bot.sendMessage(msg.chat.id, "Get your referral link from the Web App to invite friends and earn bonuses!");
+      });
+
+      bot.onText(/\/settings/, (msg) => {
+        bot.sendMessage(msg.chat.id, "Adjust your settings in the Web App for a personalized experience!");
       });
 
       bot.on('error', (error) => {

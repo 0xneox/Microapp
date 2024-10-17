@@ -7,6 +7,7 @@ const { calculateReferralReward } = require('../utils/referralUtils');
 const Referral = require('../models/Referral');3
 const { getCachedUser, updateCachedUser } = require('../utils/userCache');
 const { queueLeaderboardUpdate } = require('../jobs/jobQueue');
+const Quest = require('../models/Quest'); 
 
 
 
@@ -76,13 +77,46 @@ exports.authenticateTelegram = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: req.user.telegramId });
+    const user = await User.findOne({ telegramId: req.user.telegramId })
+      .populate('completedQuests');
+    
     if (!user) {
       logger.warn(`User not found: ${req.user.telegramId}`);
       return res.status(404).json({ message: 'User not found' });
     }
+
+    // Fetch all quests
+    const allQuests = await Quest.find({});
+
+    // Create a set of completed quest IDs for efficient lookup
+    const completedQuestIds = new Set(user.completedQuests.map(quest => quest._id.toString()));
+
+    // Add 'claimed' key to each quest
+    const questsWithClaimedStatus = allQuests.map(quest => ({
+      ...quest.toObject(),  // Spread all existing quest properties
+      claimed: completedQuestIds.has(quest._id.toString())
+    }));
+
+    // Prepare the response object
+    const profileData = {
+      _id: user._id,
+      telegramId: user.telegramId,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      xp: user.xp,
+      compute: user.compute,
+      computePower: user.computePower,
+      totalTaps: user.totalTaps,
+      referredBy: user.referredBy,
+      referrals: user.referrals,
+      id: user.telegramId,  // Assuming this is what you want for the 'id' field
+      quests: questsWithClaimedStatus,
+      completedQuestsCount: completedQuestIds.size
+    };
+
     logger.info(`Profile retrieved for user: ${user.telegramId}`);
-    res.json(user);
+    res.json(profileData);
   } catch (error) {
     logger.error(`Get profile error: ${error.message}`);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -136,6 +170,9 @@ exports.claimDailyXP = async (req, res) => {
     user.checkInStreak += 1;
     await user.save();
 
+    // Queue leaderboard update
+    await queueLeaderboardUpdate(user.telegramId, user.xp);
+
     res.json({ 
       message: 'Daily XP claimed successfully', 
       xpGained, 
@@ -147,7 +184,6 @@ exports.claimDailyXP = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
 exports.checkDailyXPClaimable = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -201,13 +237,16 @@ const distributeReferralXP = async (userId, xpGained) => {
     }
   } catch (error) {
     logger.error(`Error distributing referral XP: ${error.message}`);
+    // We're not rethrowing the error here as this is an background operation
+    // and shouldn't affect the main tap functionality
   }
 };
+
 
 exports.tap = async (req, res) => {
   try {
     const userId = req.user.telegramId;
-    let user = await getCachedUser(userId, async (id) => await User.findOne({ telegramId: id }));
+    let user = await User.findOne({ telegramId: userId });
 
     if (!user) {
       logger.warn(`User not found: ${userId}`);
@@ -233,7 +272,12 @@ exports.tap = async (req, res) => {
     }
 
     await user.save();
-    updateCachedUser(userId, user);
+
+      
+       await queueLeaderboardUpdate(user.telegramId, user.xp);
+
+    
+       await distributeReferralXP(user._id, xpGained);
 
     logger.info(`Tap successful for user ${userId}. XP: ${xpBefore} -> ${user.xp}`);
 
@@ -244,18 +288,22 @@ exports.tap = async (req, res) => {
       newTotalXp: user.xp,
       totalTaps: user.totalTaps,
       computePower: user.computePower,
-      cooldownEndTime: user.cooldownEndTime,
-      rpm: calculateRPM(user.lastTapTime, now)
+      cooldownEndTime: user.cooldownEndTime
     });
+
   } catch (error) {
     logger.error(`Tap error for user ${req.user.telegramId}:`, error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 function calculateRPM(lastTapTime, currentTime) {
   const timeDiff = (currentTime - lastTapTime) / 1000; // in seconds
   return timeDiff > 0 ? Math.round(60 / timeDiff) : 0;
 }
+
+
+
 exports.boost = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -296,6 +344,21 @@ exports.boost = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Boost error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.updateUserRank = async (req, res) => {
+  try {
+    const { userId, newRank } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.updateLeaderboardRank(newRank);
+    await user.save();
+
+    res.json({ message: 'User rank updated successfully' });
+  } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -365,8 +428,7 @@ exports.upgradeGPU = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Implement GPU upgrade logic here
-    // This is a placeholder implementation
+    // Implement GPU upgrade logic 
     user.computePower += 1;
     await user.save();
 
