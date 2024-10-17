@@ -1,51 +1,51 @@
-const User = require("../models/User");
-const Leaderboard = require("../models/Leaderboard");
-const { verifyTelegramWebAppData } = require("../utils/telegramUtils");
-const logger = require("../utils/logger");
-const { calculateReferralReward } = require("../utils/referralUtils");
-const Referral = require("../models/Referral");
-3;
-const { getCachedUser, updateCachedUser } = require("../utils/userCache");
-const { queueLeaderboardUpdate } = require("../jobs/jobQueue");
-const Quest = require("../models/Quest");
+
+const User = require('../models/User');
+const Leaderboard = require('../models/Leaderboard');
+const { verifyTelegramWebAppData } = require('../utils/telegramUtils');
+const logger = require('../utils/logger');
+const { calculateReferralReward } = require('../utils/referralUtils');
+const Referral = require('../models/Referral');3;
+const Quest = require('../models/Quest'); 
+
+
 
 exports.authenticateTelegram = async (req, res) => {
   try {
-    logger.info("Received authentication request");
-    const initData = req.header("X-Telegram-Init-Data");
-    logger.debug("InitData:", initData);
-
+    logger.info('Received authentication request');
+    const initData = req.header('X-Telegram-Init-Data');
+    logger.debug('InitData:', initData);
+    
     if (!initData) {
-      logger.error("No initData provided");
-      return res.status(400).json({ message: "No Telegram data provided" });
+      logger.error('No initData provided');
+      return res.status(400).json({ message: 'No Telegram data provided' });
     }
 
     if (!verifyTelegramWebAppData(initData)) {
-      logger.error("Invalid Telegram data");
-      return res.status(401).json({ message: "Invalid Telegram data" });
+      logger.error('Invalid Telegram data');
+      return res.status(401).json({ message: 'Invalid Telegram data' });
     }
 
     const params = new URLSearchParams(initData);
-    const userString = params.get("user");
+    const userString = params.get('user');
     if (!userString) {
-      logger.error("No user data found in initData");
-      return res.status(400).json({ message: "No user data found" });
+      logger.error('No user data found in initData');
+      return res.status(400).json({ message: 'No user data found' });
     }
 
     const userData = JSON.parse(decodeURIComponent(userString));
-    logger.debug("Parsed user data:", userData);
+    logger.debug('Parsed user data:', userData);
 
     let user = await User.findOneAndUpdate(
       { telegramId: userData.id },
-      {
-        $set: {
+      { 
+        $set: { 
           username: userData.username,
           firstName: userData.first_name,
           lastName: userData.last_name,
           languageCode: userData.language_code,
-          photoUrl: userData.photo_url,
+          photoUrl: userData.photo_url
         },
-        $setOnInsert: { telegramId: userData.id },
+        $setOnInsert: { telegramId: userData.id }
       },
       { new: true, upsert: true }
     );
@@ -62,40 +62,37 @@ exports.authenticateTelegram = async (req, res) => {
         lastName: user.lastName,
         languageCode: user.languageCode,
         photoUrl: user.photoUrl,
-        xp: user.xp,
-      },
+        xp: user.xp
+      }
     });
   } catch (error) {
-    logger.error("Authentication error:", error);
-    res
-      .status(500)
-      .json({ error: "Authentication failed", details: error.message });
+    logger.error('Authentication error:', error);
+    res.status(500).json({ error: 'Authentication failed', details: error.message });
   }
 };
 
+
+
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findOne({
-      telegramId: req.user.telegramId,
-    }).populate("completedQuests");
-
+    const user = await User.findOne({ telegramId: req.user.telegramId })
+      .populate('completedQuests');
+    
     if (!user) {
       logger.warn(`User not found: ${req.user.telegramId}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     // Fetch all quests
     const allQuests = await Quest.find({});
 
     // Create a set of completed quest IDs for efficient lookup
-    const completedQuestIds = new Set(
-      user.completedQuests.map((quest) => quest._id.toString())
-    );
+    const completedQuestIds = new Set(user.completedQuests.map(quest => quest._id.toString()));
 
     // Add 'claimed' key to each quest
-    const questsWithClaimedStatus = allQuests.map((quest) => ({
-      ...quest.toObject(), // Spread all existing quest properties
-      claimed: completedQuestIds.has(quest._id.toString()),
+    const questsWithClaimedStatus = allQuests.map(quest => ({
+      ...quest.toObject(),  // Spread all existing quest properties
+      claimed: completedQuestIds.has(quest._id.toString())
     }));
 
     // Prepare the response object
@@ -111,48 +108,47 @@ exports.getProfile = async (req, res) => {
       totalTaps: user.totalTaps,
       referredBy: user.referredBy,
       referrals: user.referrals,
-      id: user.telegramId, // Assuming this is what you want for the 'id' field
+      id: user.telegramId,  // Assuming this is what you want for the 'id' field
       quests: questsWithClaimedStatus,
-      completedQuestsCount: completedQuestIds.size,
+      completedQuestsCount: completedQuestIds.size
     };
 
     logger.info(`Profile retrieved for user: ${user.telegramId}`);
     res.json(profileData);
   } catch (error) {
     logger.error(`Get profile error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 exports.updateProfile = async (req, res) => {
   try {
     const updates = Object.keys(req.body);
-    const allowedUpdates = ["username", "avatarUrl", "language", "theme"];
-    const isValidOperation = updates.every((update) =>
-      allowedUpdates.includes(update)
-    );
+    const allowedUpdates = ['username', 'avatarUrl', 'language', 'theme'];
+    const isValidOperation = updates.every(update => allowedUpdates.includes(update));
 
     if (!isValidOperation) {
       logger.warn(`Invalid update attempt: ${req.user.telegramId}`);
-      return res.status(400).json({ error: "Invalid updates!" });
+      return res.status(400).json({ error: 'Invalid updates!' });
     }
 
-    updates.forEach((update) => (req.user[update] = req.body[update]));
+    updates.forEach(update => req.user[update] = req.body[update]);
     await req.user.save();
 
     logger.info(`Profile updated: ${req.user.telegramId}`);
     res.json(req.user);
   } catch (error) {
     logger.error(`Update profile error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 exports.claimDailyXP = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const now = new Date();
@@ -161,9 +157,9 @@ exports.claimDailyXP = async (req, res) => {
     const hoursSinceLastClaim = timeDiff / (1000 * 60 * 60);
 
     if (hoursSinceLastClaim < 24) {
-      return res.status(400).json({
-        message: "Daily XP already claimed",
-        nextClaimTime: new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000),
+      return res.status(400).json({ 
+        message: 'Daily XP already claimed',
+        nextClaimTime: new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000)
       });
     }
 
@@ -173,25 +169,25 @@ exports.claimDailyXP = async (req, res) => {
     user.checkInStreak += 1;
     await user.save();
 
-    // Queue leaderboard update
-    await queueLeaderboardUpdate(user.telegramId, user.xp);
+    // Update leaderboard
+    await updateLeaderboards(user);
 
-    res.json({
-      message: "Daily XP claimed successfully",
-      xpGained,
+    res.json({ 
+      message: 'Daily XP claimed successfully', 
+      xpGained, 
       newTotalXp: user.xp,
-      checkInStreak: user.checkInStreak,
+      checkInStreak: user.checkInStreak
     });
   } catch (error) {
     logger.error(`Claim daily XP error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 exports.checkDailyXPClaimable = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const now = new Date();
@@ -200,24 +196,22 @@ exports.checkDailyXPClaimable = async (req, res) => {
     const hoursSinceLastClaim = timeDiff / (1000 * 60 * 60);
 
     const isClaimable = hoursSinceLastClaim >= 24;
-    const nextClaimTime = isClaimable
-      ? now
-      : new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000);
+    const nextClaimTime = isClaimable ? now : new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000);
 
     res.json({
       isClaimable,
       nextClaimTime,
-      checkInStreak: user.checkInStreak,
+      checkInStreak: user.checkInStreak
     });
   } catch (error) {
     logger.error(`Check daily XP claimable error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 const distributeReferralXP = async (userId, xpGained) => {
   try {
-    const user = await User.findById(userId).populate("referredBy");
+    const user = await User.findById(userId).populate('referredBy');
     if (!user || !user.referredBy) return;
 
     let currentReferrer = user.referredBy;
@@ -225,11 +219,9 @@ const distributeReferralXP = async (userId, xpGained) => {
     const tierPercentages = [0.1, 0.05, 0.025]; // 10%, 5%, 2.5%
 
     while (currentReferrer && currentTier <= 3) {
-      const referralXP = Math.floor(
-        xpGained * tierPercentages[currentTier - 1]
-      );
+      const referralXP = Math.floor(xpGained * tierPercentages[currentTier - 1]);
       currentReferrer.xp += referralXP;
-
+      
       // Update the referral document
       await Referral.findOneAndUpdate(
         { referrer: currentReferrer._id, referred: user._id },
@@ -237,9 +229,7 @@ const distributeReferralXP = async (userId, xpGained) => {
       );
 
       await currentReferrer.save();
-      logger.info(
-        `Distributed ${referralXP} XP to referrer ${currentReferrer._id} (Tier ${currentTier})`
-      );
+      logger.info(`Distributed ${referralXP} XP to referrer ${currentReferrer._id} (Tier ${currentTier})`);
 
       currentReferrer = await User.findOne({ _id: currentReferrer.referredBy });
       currentTier++;
@@ -251,80 +241,91 @@ const distributeReferralXP = async (userId, xpGained) => {
   }
 };
 
+
 exports.tap = async (req, res) => {
   try {
-    const userId = req.user.telegramId;
-    const { count = 1 } = req?.body;
-    console.log("count: ", count);
-    let user = await User.findOne({ telegramId: userId });
-
+    const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) {
-      logger.warn(`User not found: ${userId}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const now = new Date();
     if (user.cooldownEndTime && now < user.cooldownEndTime) {
-      logger.info(
-        `Cooldown active for user ${userId} until ${user.cooldownEndTime}`
-      );
-      return res.status(400).json({
-        message: "Cooling down",
-        cooldownEndTime: user.cooldownEndTime,
+      logger.info(`Tap rejected due to cooldown: ${user.telegramId}`);
+      return res.status(400).json({ 
+        message: 'Cooling down', 
+        cooldownEndTime: user.cooldownEndTime
       });
     }
 
-    const xpBefore = user.xp;
-    const xpGained = user.computePower * count;
+    user.totalTaps += 1;
+    const xpGained = user.computePower;
     user.xp += xpGained;
     user.compute += xpGained;
-    user.totalTaps += count;
     user.lastTapTime = now;
 
     if (user.totalTaps % 500 === 0) {
       user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
-      logger.info(`Cooldown initiated for user ${userId}`);
+      logger.info(`Cooldown initiated for user: ${user.telegramId}`);
     }
 
     await user.save();
 
-    await queueLeaderboardUpdate(user.telegramId, user.xp);
+    // Update leaderboard
+    await updateLeaderboards(user);
 
+    // Distribute referral XP
     await distributeReferralXP(user._id, xpGained);
 
-    logger.info(
-      `Tap successful for user ${userId}. XP: ${xpBefore} -> ${user.xp}`
-    );
-
-    res.json({
-      message: "Tap successful",
-      xpGained,
-      xpBefore,
-      newTotalXp: user.xp,
-      totalTaps: user.totalTaps,
-      computePower: user.computePower,
-      cooldownEndTime: user.cooldownEndTime,
+    logger.info(`Successful tap: ${user.telegramId}`);
+    res.json({ 
+      message: 'Tap successful', 
+      user: {
+        xp: user.xp,
+        compute: user.compute,
+        totalTaps: user.totalTaps,
+        computePower: user.computePower,
+        gpuLevel: user.gpuLevel,
+        cooldownEndTime: user.cooldownEndTime,
+        boostCount: user.boostCount
+      }
     });
   } catch (error) {
-    logger.error(`Tap error for user ${req.user.telegramId}:`, error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    logger.error(`Tap error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 function calculateRPM(lastTapTime, currentTime) {
   const timeDiff = (currentTime - lastTapTime) / 1000; // in seconds
   return timeDiff > 0 ? Math.round(60 / timeDiff) : 0;
 }
 
+// Helper function to update leaderboards
+async function updateLeaderboards(user) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const allTimeDate = new Date(2000, 0, 1);
+
+  await Promise.all([
+    Leaderboard.updateEntry('daily', today, user._id, user.username, user.xp),
+    Leaderboard.updateEntry('weekly', weekStart, user._id, user.username, user.xp),
+    Leaderboard.updateEntry('all-time', allTimeDate, user._id, user.username, user.xp)
+  ]);
+}
+
 exports.boost = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     if (user.boostCount < 1) {
-      return res.status(400).json({ message: "No boost available" });
+      return res.status(400).json({ message: 'No boost available' });
     }
 
     const now = new Date();
@@ -345,18 +346,18 @@ exports.boost = async (req, res) => {
     await user.save();
 
     res.json({
-      message: "Boost activated",
+      message: 'Boost activated',
       user: {
         xp: user.xp,
         compute: user.compute,
         totalTaps: user.totalTaps,
         boostCount: user.boostCount,
-        lastBoostTime: user.lastBoostTime,
-      },
+        lastBoostTime: user.lastBoostTime
+      }
     });
   } catch (error) {
     logger.error(`Boost error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -364,14 +365,14 @@ exports.updateUserRank = async (req, res) => {
   try {
     const { userId, newRank } = req.body;
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.updateLeaderboardRank(newRank);
     await user.save();
 
-    res.json({ message: "User rank updated successfully" });
+    res.json({ message: 'User rank updated successfully' });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -380,16 +381,16 @@ exports.getCooldownStatus = async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) {
       logger.warn(`User not found for cooldown status: ${req.user._id}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
     logger.info(`Cooldown status retrieved for user: ${user.telegramId}`);
     res.json({
       cooldownEndTime: user.cooldownEndTime,
-      isCoolingDown: user.cooldownEndTime > Date.now(),
+      isCoolingDown: user.cooldownEndTime > Date.now()
     });
   } catch (error) {
     logger.error(`Get cooldown status error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -398,13 +399,13 @@ exports.getDailyPoints = async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) {
       logger.warn(`User not found for daily points: ${req.user._id}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
     logger.info(`Daily points retrieved for user: ${user.telegramId}`);
     res.json({ dailyPoints: user.dailyPoints });
   } catch (error) {
     logger.error(`Get daily points error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -415,7 +416,7 @@ exports.getUserStats = async (req, res) => {
 
     if (!user) {
       logger.warn(`User not found: ${userId}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     res.json({
@@ -424,14 +425,11 @@ exports.getUserStats = async (req, res) => {
       totalTaps: user.totalTaps,
       computePower: user.computePower,
       cooldownEndTime: user.cooldownEndTime,
-      lastTapTime: user.lastTapTime,
+      lastTapTime: user.lastTapTime
     });
   } catch (error) {
-    logger.error(
-      `Error fetching user stats for ${req.user.telegramId}:`,
-      error
-    );
-    res.status(500).json({ message: "Server error", error: error.message });
+    logger.error(`Error fetching user stats for ${req.user.telegramId}:`, error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -440,22 +438,19 @@ exports.upgradeGPU = async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) {
       logger.warn(`User not found for GPU upgrade: ${req.user._id}`);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    // Implement GPU upgrade logic
+    // Implement GPU upgrade logic 
     user.computePower += 1;
     await user.save();
 
-    logger.info(
-      `GPU upgraded for user: ${user.telegramId}, New compute power: ${user.computePower}`
-    );
-    res.json({
-      message: "GPU upgraded successfully",
-      newComputePower: user.computePower,
-    });
+    logger.info(`GPU upgraded for user: ${user.telegramId}, New compute power: ${user.computePower}`);
+    res.json({ message: 'GPU upgraded successfully', newComputePower: user.computePower });
   } catch (error) {
     logger.error(`Upgrade GPU error: ${error.message}`);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+
