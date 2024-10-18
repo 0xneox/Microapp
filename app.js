@@ -9,13 +9,12 @@ const morgan = require("morgan");
 const logger = require("./utils/logger");
 const connectDB = require("./database/mongoose");
 const errorHandler = require("./middleware/errorHandler");
-const rateLimiter = require("./middleware/rateLimiter");
 const auth = require("./middleware/auth");
 const { initTelegramBot } = require("./utils/telegramBot");
 const { authenticateTelegram } = require("./controllers/userController");
 const { validateTelegramAuth } = require("./validation/userValidation");
 const userController = require("./controllers/userController");
-const cacheMiddleware = require("./middleware/cacheMiddleware");
+const { limiter, tapLimiter } = require("./middleware/rateLimiter");
 
 // Import route files
 const config = require("./config");
@@ -28,7 +27,6 @@ const settingsRoutes = require("./routes/settingsRoutes");
 const achievementRoutes = require("./routes/achievementRoutes");
 
 const { initCronJobs } = require("./utils/cronJobs");
-const { gracefulShutdown } = require("./jobs/jobQueue");
 
 const app = express();
 
@@ -36,23 +34,9 @@ const app = express();
 connectDB();
 
 // Enhanced security headers
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-    referrerPolicy: {
-      policy: "strict-origin-when-cross-origin",
-    },
-  })
-);
+app.use(helmet());
 
-// CORS config
+// CORS configuration
 app.use(
   cors({
     origin: [
@@ -70,7 +54,16 @@ app.use(
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-// app.use(rateLimiter);
+
+// Apply the general rate limiter
+app.use(limiter);
+
+// Use morgan for logging
+app.use(
+  morgan("combined", {
+    stream: { write: (message) => logger.info(message.trim()) },
+  })
+);
 
 // Prometheus metrics
 prometheus.collectDefaultMetrics({ timeout: 5000 });
@@ -110,7 +103,7 @@ app.post(
   userController.authenticateTelegram
 );
 
-// API Routes with caching middleware
+// API Routes
 app.use("/api/users", userRoutes);
 app.use("/api/quests", auth, questRoutes);
 app.use("/api/leaderboard", auth, leaderboardRoutes);
@@ -118,6 +111,9 @@ app.use("/api/profile-dashboard", auth, profileDashboardRoutes);
 app.use("/api/referral", auth, referralRoutes);
 app.use("/api/settings", auth, settingsRoutes);
 app.use("/api/achievements", auth, achievementRoutes);
+
+// Apply the tap-specific rate limiter to the tap route
+app.post("/api/tap", auth, tapLimiter, userController.tap);
 
 // Expose metrics endpoint for Prometheus
 app.get("/metrics", async (req, res) => {
@@ -147,10 +143,9 @@ app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
 app.use(errorHandler);
 
 // Graceful shutdown
-process.on("SIGTERM", async () => {
+process.on("SIGTERM", () => {
   logger.info("SIGTERM signal received.");
   logger.info("Closing HTTP server.");
-  await gracefulShutdown();
   server.close(() => {
     logger.info("HTTP server closed.");
     // Close database connection

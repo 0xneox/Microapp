@@ -6,6 +6,7 @@ const auth = require("../middleware/auth");
 const isTeamMember = require("../middleware/isTeamMember");
 const { body, validationResult } = require("express-validator");
 const logger = require("../utils/logger");
+const { verifyTelegramQuest } = require("../utils/questVerification");
 
 // Get all quests
 router.get("/", auth, async (req, res) => {
@@ -84,6 +85,11 @@ async function verifyQuestCompletion(user, quest) {
       return true;
     case "twitter":
     case "telegram":
+      return await verifyTelegramQuest(
+        quest?.action,
+        quest?.targetId,
+        user?.telegramId
+      );
     case "discord":
       // Implement social media quest verification
       return true;
