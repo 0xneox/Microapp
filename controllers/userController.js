@@ -4,7 +4,9 @@ const Leaderboard = require('../models/Leaderboard');
 const { verifyTelegramWebAppData } = require('../utils/telegramUtils');
 const logger = require('../utils/logger');
 const { calculateReferralReward } = require('../utils/referralUtils');
-const Referral = require('../models/Referral');3;
+const Referral = require('../models/Referral');3
+const { getCachedUser, updateCachedUser } = require('../utils/userCache');
+const { queueLeaderboardUpdate } = require('../jobs/jobQueue');
 const Quest = require('../models/Quest'); 
 
 
@@ -50,6 +52,20 @@ exports.authenticateTelegram = async (req, res) => {
       { new: true, upsert: true }
     );
 
+
+    // Check if user can claim daily XP
+    let dailyXPClaimed = false;
+    let xpGained = 0;
+    if (user.canClaimDailyXP()) {
+      xpGained = 500; 
+      user.xp += xpGained;
+      user.lastDailyClaimDate = new Date();
+      user.checkInStreak += 1;
+      dailyXPClaimed = true;
+      await user.save();
+      logger.info(`Daily XP claimed for user: ${user.telegramId}, XP gained: ${xpGained}`);
+    }
+
     const token = user.generateAuthToken();
 
     logger.info(`User authenticated successfully: ${user.telegramId}`);
@@ -62,7 +78,9 @@ exports.authenticateTelegram = async (req, res) => {
         lastName: user.lastName,
         languageCode: user.languageCode,
         photoUrl: user.photoUrl,
-        xp: user.xp
+        xp: user.xp,
+   dailyXPClaimed,
+        xpGained
       }
     });
   } catch (error) {
@@ -143,7 +161,6 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-
 exports.claimDailyXP = async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
@@ -169,8 +186,8 @@ exports.claimDailyXP = async (req, res) => {
     user.checkInStreak += 1;
     await user.save();
 
-    // Update leaderboard
-    await updateLeaderboards(user);
+    // Queue leaderboard update
+    await queueLeaderboardUpdate(user.telegramId, user.xp);
 
     res.json({ 
       message: 'Daily XP claimed successfully', 
@@ -244,78 +261,64 @@ const distributeReferralXP = async (userId, xpGained) => {
 
 exports.tap = async (req, res) => {
   try {
-    const user = await User.findOne({ telegramId: req.user.telegramId });
+    const userId = req.user.telegramId;
+    let user = await User.findOne({ telegramId: userId });
+
     if (!user) {
+      logger.warn(`User not found: ${userId}`);
       return res.status(404).json({ message: 'User not found' });
     }
 
     const now = new Date();
     if (user.cooldownEndTime && now < user.cooldownEndTime) {
-      logger.info(`Tap rejected due to cooldown: ${user.telegramId}`);
-      return res.status(400).json({ 
-        message: 'Cooling down', 
-        cooldownEndTime: user.cooldownEndTime
-      });
+      logger.info(`Cooldown active for user ${userId} until ${user.cooldownEndTime}`);
+      return res.status(400).json({ message: 'Cooling down', cooldownEndTime: user.cooldownEndTime });
     }
 
-    user.totalTaps += 1;
+    const xpBefore = user.xp;
     const xpGained = user.computePower;
     user.xp += xpGained;
     user.compute += xpGained;
+    user.totalTaps += 1;
     user.lastTapTime = now;
 
     if (user.totalTaps % 500 === 0) {
       user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
-      logger.info(`Cooldown initiated for user: ${user.telegramId}`);
+      logger.info(`Cooldown initiated for user ${userId}`);
     }
 
     await user.save();
 
-    // Update leaderboard
-    await updateLeaderboards(user);
+      
+       await queueLeaderboardUpdate(user.telegramId, user.xp);
 
-    // Distribute referral XP
-    await distributeReferralXP(user._id, xpGained);
+    
+       await distributeReferralXP(user._id, xpGained);
 
-    logger.info(`Successful tap: ${user.telegramId}`);
+    logger.info(`Tap successful for user ${userId}. XP: ${xpBefore} -> ${user.xp}`);
+
     res.json({ 
       message: 'Tap successful', 
-      user: {
-        xp: user.xp,
-        compute: user.compute,
-        totalTaps: user.totalTaps,
-        computePower: user.computePower,
-        gpuLevel: user.gpuLevel,
-        cooldownEndTime: user.cooldownEndTime,
-        boostCount: user.boostCount
-      }
+      xpGained,
+      xpBefore,
+      newTotalXp: user.xp,
+      totalTaps: user.totalTaps,
+      computePower: user.computePower,
+      cooldownEndTime: user.cooldownEndTime
     });
+
   } catch (error) {
-    logger.error(`Tap error: ${error.message}`);
+    logger.error(`Tap error for user ${req.user.telegramId}:`, error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
 
 function calculateRPM(lastTapTime, currentTime) {
   const timeDiff = (currentTime - lastTapTime) / 1000; // in seconds
   return timeDiff > 0 ? Math.round(60 / timeDiff) : 0;
 }
 
-// Helper function to update leaderboards
-async function updateLeaderboards(user) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay());
-  const allTimeDate = new Date(2000, 0, 1);
 
-  await Promise.all([
-    Leaderboard.updateEntry('daily', today, user._id, user.username, user.xp),
-    Leaderboard.updateEntry('weekly', weekStart, user._id, user.username, user.xp),
-    Leaderboard.updateEntry('all-time', allTimeDate, user._id, user.username, user.xp)
-  ]);
-}
 
 exports.boost = async (req, res) => {
   try {
@@ -441,7 +444,8 @@ exports.upgradeGPU = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Implement GPU upgrade logic 
+    // Implement GPU upgrade logic here
+    // This is a placeholder implementation
     user.computePower += 1;
     await user.save();
 
