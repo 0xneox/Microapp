@@ -113,14 +113,9 @@ app.post(
 // API Routes with caching middleware
 app.use("/api/users", userRoutes);
 app.use("/api/quests", auth, questRoutes);
-app.use("/api/leaderboard", auth, cacheMiddleware(60), leaderboardRoutes);
-app.use(
-  "/api/profile-dashboard",
-  auth,
-  cacheMiddleware(300),
-  profileDashboardRoutes
-);
-app.use("/api/referral", auth, cacheMiddleware(300), referralRoutes);
+app.use("/api/leaderboard", auth, leaderboardRoutes);
+app.use("/api/profile-dashboard", auth, profileDashboardRoutes);
+app.use("/api/referral", auth, referralRoutes);
 app.use("/api/settings", auth, settingsRoutes);
 app.use("/api/achievements", auth, achievementRoutes);
 
