@@ -14,7 +14,7 @@ const { initTelegramBot } = require("./utils/telegramBot");
 const { authenticateTelegram } = require("./controllers/userController");
 const { validateTelegramAuth } = require("./validation/userValidation");
 const userController = require("./controllers/userController");
-const { limiter, tapLimiter } = require("./middleware/rateLimiter");
+// const { limiter, tapLimiter } = require("./middleware/rateLimiter");
 
 // Import route files
 const config = require("./config");
@@ -56,7 +56,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Apply the general rate limiter
-app.use(limiter);
+// app.use(limiter);
 
 // Use morgan for logging
 app.use(
@@ -113,7 +113,7 @@ app.use("/api/settings", auth, settingsRoutes);
 app.use("/api/achievements", auth, achievementRoutes);
 
 // Apply the tap-specific rate limiter to the tap route
-app.post("/api/tap", auth, tapLimiter, userController.tap);
+// app.post("/api/tap", auth, tapLimiter, userController.tap);
 
 // Expose metrics endpoint for Prometheus
 app.get("/metrics", async (req, res) => {
