@@ -131,7 +131,8 @@ async function verifyQuestCompletion(user, quest) {
 
     case "level":
       return user.level >= quest.requirement;
-
+    case "leaderboard":
+      return true;
     default:
       throw new Error("Unknown quest type");
   }

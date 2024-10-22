@@ -19,18 +19,21 @@ router.get(
             $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
           };
           query.compute = { $gt: 0 }; // Ensure compute is greater than 0
-          sort = { compute: -1 };
+          // sort = { compute: -1 };
+          sort = { xp: -1 };
           break;
         case "weekly":
           query.lastTapTime = {
             $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           };
           query.compute = { $gt: 0 }; // Ensure compute is greater than 0
-          sort = { compute: -1 };
+          // sort = { compute: -1 };
+          sort = { xp: -1 };
           break;
         case "all-time":
           query.computePower = { $gt: 0 }; // Ensure computePower is greater than 0
-          sort = { computePower: -1, compute: -1 };
+          // sort = { computePower: -1, compute: -1 };
+          sort = { xp: -1 };
           break;
       }
 
