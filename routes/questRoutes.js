@@ -45,6 +45,7 @@ router.post("/claim/:questId", auth, async (req, res) => {
   try {
     const { questId } = req.params;
     const user = await User.findOne({ telegramId: req.user.telegramId });
+    console.log("user: ", user?.telegramId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const quest = await Quest.findById(questId);
@@ -58,10 +59,11 @@ router.post("/claim/:questId", auth, async (req, res) => {
     // This is a simplified version. In production, implement proper verification for each quest type
     let verified = await verifyQuestCompletion(user, quest);
     // console.log("verified", verified);
-    if (!verified) {
-      return res
-        .status(400)
-        .json({ message: "User has not joined telegram channel" });
+    if (!verified && quest?.type == "telegram") {
+      return res.status(400).json({
+        message: "User has not joined telegram channel",
+        joined: false,
+      });
     }
 
     user.xp += quest.xpReward;
@@ -111,7 +113,6 @@ async function verifyQuestCompletion(user, quest) {
     case "daily":
     case "weekly":
       return true;
-
     case "twitter":
       return true;
     case "telegram":
@@ -122,7 +123,6 @@ async function verifyQuestCompletion(user, quest) {
         quest.targetId,
         user.telegramId
       );
-
     case "discord":
       return true;
 
@@ -132,6 +132,11 @@ async function verifyQuestCompletion(user, quest) {
     case "level":
       return user.level >= quest.requirement;
     case "leaderboard":
+      return true;
+
+    case "referral":
+      return true;
+    case "achievement":
       return true;
     default:
       throw new Error("Unknown quest type");

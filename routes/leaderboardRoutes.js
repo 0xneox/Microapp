@@ -10,6 +10,7 @@ router.get(
   async (req, res) => {
     try {
       const { type } = req.params;
+      console.log("type", type);
       let query = { username: { $exists: true, $ne: "" } }; // Ensure username exists and is not empty
       let sort = {};
 
