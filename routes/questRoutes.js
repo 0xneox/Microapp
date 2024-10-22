@@ -57,9 +57,11 @@ router.post("/claim/:questId", auth, async (req, res) => {
     // Verify quest completion logic here
     // This is a simplified version. In production, implement proper verification for each quest type
     let verified = await verifyQuestCompletion(user, quest);
-
+    // console.log("verified", verified);
     if (!verified) {
-      return res.status(400).json({ message: "Quest requirements not met" });
+      return res
+        .status(400)
+        .json({ message: "User has not joined telegram channel" });
     }
 
     user.xp += quest.xpReward;
@@ -77,28 +79,61 @@ router.post("/claim/:questId", auth, async (req, res) => {
 });
 
 // Helper function to verify quest completion
+// async function verifyQuestCompletion(user, quest) {
+//   switch (quest.type) {
+//     case "daily":
+//     case "weekly":
+//       // Implement daily/weekly quest verification
+//       return true;
+//     case "twitter":
+//     case "telegram": {
+//       return await verifyTelegramQuest(
+//         quest?.action,
+//         quest?.targetId,
+//         user?.telegramId
+//       );
+//     }
+//     case "discord":
+//       // Implement social media quest verification
+//       return true;
+//     case "tap":
+//       return user.totalTaps >= quest.requirement;
+//     case "level":
+//       return user.level >= quest.requirement;
+//     default:
+//       return false;
+//   }
+// }
 async function verifyQuestCompletion(user, quest) {
+  if (!user || !quest) throw new Error("User or quest is undefined");
+
   switch (quest.type) {
     case "daily":
     case "weekly":
-      // Implement daily/weekly quest verification
       return true;
+
     case "twitter":
-    case "telegram":
-      return await verifyTelegramQuest(
-        quest?.action,
-        quest?.targetId,
-        user?.telegramId
-      );
-    case "discord":
-      // Implement social media quest verification
       return true;
+    case "telegram":
+      if (!quest.action || !quest.targetId || !user.telegramId)
+        throw new Error("Missing data");
+      return await verifyTelegramQuest(
+        quest.action,
+        quest.targetId,
+        user.telegramId
+      );
+
+    case "discord":
+      return true;
+
     case "tap":
       return user.totalTaps >= quest.requirement;
+
     case "level":
       return user.level >= quest.requirement;
+
     default:
-      return false;
+      throw new Error("Unknown quest type");
   }
 }
 

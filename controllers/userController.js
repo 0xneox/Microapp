@@ -282,15 +282,15 @@ exports.tap = async (req, res) => {
     }
 
     const now = new Date();
-    if (user.cooldownEndTime && now < user.cooldownEndTime) {
-      logger.info(
-        `Cooldown active for user ${userId} until ${user.cooldownEndTime}`
-      );
-      return res.status(400).json({
-        message: "Cooling down",
-        cooldownEndTime: user.cooldownEndTime,
-      });
-    }
+    // if (user.cooldownEndTime && now < user.cooldownEndTime) {
+    //   logger.info(
+    //     `Cooldown active for user ${userId} until ${user.cooldownEndTime}`
+    //   );
+    //   return res.status(400).json({
+    //     message: "Cooling down",
+    //     cooldownEndTime: user.cooldownEndTime,
+    //   });
+    // }
 
     const xpBefore = user.xp;
     const xpGained = user.computePower * count;
@@ -299,10 +299,10 @@ exports.tap = async (req, res) => {
     user.totalTaps += count;
     user.lastTapTime = now;
 
-    if (user.totalTaps % 500 === 0) {
-      user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
-      logger.info(`Cooldown initiated for user ${userId}`);
-    }
+    // if (user.totalTaps % 500 === 0) {
+    //   user.cooldownEndTime = new Date(now.getTime() + 10 * 1000); // 10 seconds cooldown
+    //   logger.info(`Cooldown initiated for user ${userId}`);
+    // }
 
     await user.save();
 
