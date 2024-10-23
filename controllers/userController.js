@@ -49,11 +49,12 @@ exports.authenticateTelegram = async (req, res) => {
       },
       { new: true, upsert: true }
     );
-
+      console.log("user", user);
     // Check if user can claim daily XP
     let dailyXPClaimed = false;
     let xpGained = 0;
-    if (user.canClaimDailyXP()) {
+    // if the user is new then claim daily xp.
+    if (user.canClaimDailyXP() && user?.xp == 0) {
       xpGained = 500;
       user.xp += xpGained;
       user.lastDailyClaimDate = new Date();
