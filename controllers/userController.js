@@ -200,6 +200,7 @@ exports.claimDailyXP = async (req, res) => {
       xpGained,
       newTotalXp: user.xp,
       checkInStreak: user.checkInStreak,
+      nextClaimTime: new Date(now + 24 * 60 * 60 * 1000),
     });
   } catch (error) {
     logger.error(`Claim daily XP error: ${error.message}`);
