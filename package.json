@@ -5,9 +5,12 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
+    "test:referral": "node tests/runTests.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+      "setup-db": "node setup-mongodb.js",
+    "dev": "npm run setup-db && node app.js"
   },
   "keywords": [],
   "author": "",
