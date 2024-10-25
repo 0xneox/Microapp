@@ -28,7 +28,8 @@ const userSchema = new mongoose.Schema(
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     referralCode: { type: String, unique: true, sparse: true, index: true },
     referralChain: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    totalReferralXP: { type: Number, default: 0 },
+    totalReferralXP: { type: Number, default: 0, index: true }, 
+    totalReferralRewards: { type: Number, default: 0 },
     achievements: [
       {
         id: String,
