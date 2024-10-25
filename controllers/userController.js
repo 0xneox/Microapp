@@ -114,11 +114,11 @@ exports.getProfile = async (req, res) => {
 
     // Add 'claimed' key to each quest
     const questsWithClaimedStatus = allQuests.map((quest) => ({
-      ...quest.toObject(), // Spread all existing quest properties
+      ...quest.toObject(),
       claimed: completedQuestIds.has(quest._id.toString()),
     }));
 
-    // Prepare the response object
+    // Prepare the response object with both reward fields
     const profileData = {
       _id: user._id,
       telegramId: user.telegramId,
@@ -131,9 +131,27 @@ exports.getProfile = async (req, res) => {
       totalTaps: user.totalTaps,
       referredBy: user.referredBy,
       referrals: user.referrals,
-      id: user.telegramId, // Assuming this is what you want for the 'id' field
+      totalReferralXP: user.totalReferralXP || 0,
+      totalReferralRewards: user.totalReferralRewards || 0,
+      id: user.telegramId,
       quests: questsWithClaimedStatus,
       completedQuestsCount: completedQuestIds.size,
+      // Additional user stats
+      stats: {
+        checkInStreak: user.checkInStreak,
+        lastDailyClaimDate: user.lastDailyClaimDate,
+        gpuLevel: user.gpuLevel,
+        level: user.level,
+        boostCount: user.boostCount,
+        lastBoostTime: user.lastBoostTime
+      },
+      // Referral specific stats
+      referralStats: {
+        totalReferrals: user.referrals.length,
+        totalReferralXP: user.totalReferralXP || 0,
+        totalReferralRewards: user.totalReferralRewards || 0,
+        referralCode: user.referralCode
+      }
     };
 
     logger.info(`Profile retrieved for user: ${user.telegramId}`);
@@ -245,15 +263,20 @@ const distributeReferralXP = async (userId, xpGained) => {
     const tierPercentages = [0.1, 0.05, 0.025]; // 10%, 5%, 2.5%
 
     while (currentReferrer && currentTier <= 3) {
-      const referralXP = Math.floor(
-        xpGained * tierPercentages[currentTier - 1]
-      );
+      const referralXP = Math.floor(xpGained * tierPercentages[currentTier - 1]);
+      
+      // Update both XP tracking fields
       currentReferrer.xp += referralXP;
+      currentReferrer.totalReferralXP = (currentReferrer.totalReferralXP || 0) + referralXP;
+      currentReferrer.totalReferralRewards = (currentReferrer.totalReferralRewards || 0) + referralXP;
 
       // Update the referral document
       await Referral.findOneAndUpdate(
         { referrer: currentReferrer._id, referred: user._id },
-        { $inc: { totalRewardsDistributed: referralXP } }
+        { 
+          $inc: { totalRewardsDistributed: referralXP },
+          $set: { lastRewardDate: new Date() }
+        }
       );
 
       await currentReferrer.save();
@@ -266,8 +289,7 @@ const distributeReferralXP = async (userId, xpGained) => {
     }
   } catch (error) {
     logger.error(`Error distributing referral XP: ${error.message}`);
-    // We're not rethrowing the error here as this is an background operation
-    // and shouldn't affect the main tap functionality
+    // We don't rethrow as this is a background operation
   }
 };
 
