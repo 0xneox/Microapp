@@ -1,91 +1,85 @@
+
+
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
-const Referral = require('../models/Referral');
 const auth = require('../middleware/auth');
-const { generateReferralCode, validateReferralCode } = require('../utils/referralUtils');
+const referralController = require('../controllers/referralController');
 const logger = require('../utils/logger');
 
-// Generate referral code
+/**
+ * @route POST /api/referral/generate-code
+ * @desc Generate unique referral code for user
+ * @access Private
+ */
 router.post('/generate-code', auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ telegramId: req.user.telegramId });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    if (!user.referralCode) {
-      user.referralCode = generateReferralCode();
-      await user.save();
+    try {
+        await referralController.generateReferralCode(req, res);
+    } catch (error) {
+        logger.error('Route - Generate referral code error:', error);
+        res.status(500).json({ 
+            message: 'Failed to generate referral code',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    res.json({ referralCode: user.referralCode });
-  } catch (error) {
-    logger.error('Error generating referral code:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
 });
 
-// Apply referral code
+/**
+ * @route POST /api/referral/apply-code
+ * @desc Apply referral code and create referral chain
+ * @access Private
+ */
 router.post('/apply-code', auth, async (req, res) => {
-  try {
-    const { referralCode } = req.body;
-    if (!validateReferralCode(referralCode)) {
-      return res.status(400).json({ message: 'Invalid referral code format' });
+    try {
+        await referralController.applyReferralCode(req, res);
+    } catch (error) {
+        logger.error('Route - Apply referral code error:', error);
+        res.status(500).json({ 
+            message: 'Failed to apply referral code',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    const referredUser = await User.findOne({ telegramId: req.user.telegramId });
-    if (!referredUser) return res.status(404).json({ message: 'User not found' });
-    if (referredUser.referredBy) return res.status(400).json({ message: 'You have already used a referral code' });
-
-    const referrer = await User.findOne({ referralCode });
-    if (!referrer) return res.status(400).json({ message: 'Invalid referral code' });
-    if (referrer.telegramId === referredUser.telegramId) return res.status(400).json({ message: 'You cannot refer yourself' });
-
-    referredUser.referredBy = referrer._id;
-    referrer.referrals.push(referredUser._id);
-
-    // Create a new Referral document
-    const newReferral = new Referral({
-      referrer: referrer._id,
-      referred: referredUser._id,
-      code: referralCode,
-      tier: 1, // First-level referral
-    });
-
-    await Promise.all([referredUser.save(), referrer.save(), newReferral.save()]);
-    await referredUser.updateReferralChain();
-
-    res.json({ message: 'Referral code applied successfully' });
-  } catch (error) {
-    logger.error('Error applying referral code:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
 });
 
-// Get referral stats
+/**
+ * @route GET /api/referral/stats
+ * @desc Get user's referral statistics
+ * @access Private
+ */
 router.get('/stats', auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ telegramId: req.user.telegramId }).populate('referrals');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    const referrals = await Referral.find({ referrer: user._id });
-
-    const stats = {
-      totalReferrals: user.referrals.length,
-      totalReferralXP: user.totalReferralXP,
-      referralCode: user.referralCode,
-      referralStats: referrals.map(r => ({
-        username: r.referred.username,
-        date: r.dateReferred,
-        tier: r.tier,
-        rewardsDistributed: r.totalRewardsDistributed
-      }))
-    };
-
-    res.json(stats);
-  } catch (error) {
-    logger.error('Error fetching referral stats:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
+    try {
+        await referralController.getReferralStats(req, res);
+    } catch (error) {
+        logger.error('Route - Get referral stats error:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch referral statistics',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
 });
+
+/**
+ * @route GET /api/referral/rewards/:userId
+ * @desc Get specific user's referral rewards
+ * @access Private
+ */
+router.get('/rewards/:userId', auth, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        if (req.user.telegramId !== userId && !req.user.isTeamMember) {
+            return res.status(403).json({ message: 'Not authorized to view these rewards' });
+        }
+        
+        const rewards = await referralController.getUserReferralRewards(userId);
+        res.json(rewards);
+    } catch (error) {
+        logger.error('Route - Get user rewards error:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch user rewards',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+
 
 module.exports = router;
