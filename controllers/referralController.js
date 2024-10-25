@@ -139,6 +139,8 @@ async function processReferralReward(userId, xpAmount) {
     session.endSession();
   }
 
+ 
+
 exports.generateReferralCode = async (req, res) => {
   const session = await User.startSession();
   try {
@@ -285,7 +287,7 @@ exports.applyReferralCode = async (req, res) => {
 };
 
 exports.processReferralReward = async (userId, xpAmount) => {
-  const session = await User.startSession();
+  const session = await mongoose.startSession();
   try {
     let success = false;
     await session.withTransaction(async () => {
@@ -296,19 +298,51 @@ exports.processReferralReward = async (userId, xpAmount) => {
       .populate('referrer')
       .session(session);
 
+      if (!referrals.length) {
+        logger.debug(`No active referrals found for user ${userId}`);
+        return;
+      }
+
       const updatePromises = referrals.map(async (referral) => {
         try {
           const rewardAmount = calculateReferralReward(referral.tier, xpAmount);
-          if (rewardAmount <= 0 || !referral.referrer) return;
+          if (rewardAmount <= 0 || !referral.referrer) {
+            logger.debug(`No reward to process for referral ${referral._id}`);
+            return null;
+          }
 
+          // Update referral document
           referral.totalRewardsDistributed += rewardAmount;
           referral.lastRewardDate = new Date();
-          referral.referrer.xp += rewardAmount;
-          referral.referrer.totalReferralXP = (referral.referrer.totalReferralXP || 0) + rewardAmount;
+
+          // Update referrer's stats
+          const referrer = await User.findById(referral.referrer._id).session(session);
+          if (!referrer) {
+            logger.warn(`Referrer not found: ${referral.referrer._id}`);
+            return null;
+          }
+
+          // Update both XP fields
+          referrer.xp += rewardAmount;
+          referrer.totalReferralXP = (referrer.totalReferralXP || 0) + rewardAmount;
+          referrer.totalReferralRewards = (referrer.totalReferralRewards || 0) + rewardAmount;
+
+          // Add activity logging if needed
+          await new Activity({
+            user: referrer._id,
+            type: 'referral_reward',
+            details: {
+              amount: rewardAmount,
+              fromUser: userId,
+              tier: referral.tier
+            }
+          }).save({ session });
+
+          logger.info(`Processed referral reward: ${rewardAmount} XP for user ${referrer.telegramId} (Tier ${referral.tier})`);
 
           return Promise.all([
             referral.save({ session }),
-            referral.referrer.save({ session })
+            referrer.save({ session })
           ]);
         } catch (err) {
           logger.error(`Error processing individual referral reward: ${err.message}`);
@@ -316,8 +350,8 @@ exports.processReferralReward = async (userId, xpAmount) => {
         }
       });
 
-      await Promise.all(updatePromises.filter(Boolean));
-      success = true;
+      const results = await Promise.all(updatePromises.filter(Boolean));
+      success = results.length > 0;
     });
 
     if (success) {
